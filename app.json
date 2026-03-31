@@ -43,6 +43,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1de2f899-4ac8-4408-9585-3dbb3d7fb789"
+      }
+    },
+    "owner": "visiobal"
   }
 }
