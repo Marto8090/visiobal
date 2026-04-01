@@ -11,6 +11,7 @@ export default function DeviceListItem({ device, onPress }: Props) {
     <Pressable style={styles.item} onPress={() => onPress(device)}>
       <Text style={styles.name}>{device.name}</Text>
       <Text style={styles.id}>ID: {device.id}</Text>
+      {device.rssi != null && <Text style={styles.meta}>RSSI: {device.rssi} dBm</Text>}
     </Pressable>
   );
 }
@@ -29,6 +30,10 @@ const styles = StyleSheet.create({
   },
   id: {
     color: '#aaa',
+    marginTop: 4,
+  },
+  meta: {
+    color: '#60a5fa',
     marginTop: 4,
   },
 });
