@@ -4,7 +4,6 @@ import type { BleManager as BleManagerType, Device, Subscription } from 'react-n
 import { BallDevice } from '../types/bluetooth';
 
 const SCAN_DURATION_MS = 8000;
-const TARGET_NAME = 'Martin Nothing Ear';
 type BleRuntime = typeof import('react-native-ble-plx');
 
 let bleRuntime: BleRuntime | null = null;
@@ -20,6 +19,7 @@ function getBleRuntime(): BleRuntime {
   }
 
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Load lazily so unsupported builds do not crash on import.
     bleRuntime = require('react-native-ble-plx') as BleRuntime;
     return bleRuntime;
   } catch {
@@ -59,9 +59,8 @@ function getAdvertisedName(device: Device): string | null {
   return name ? name : null;
 }
 
-function matchesVisiobal(device: Device): boolean {
-  const advertisedName = getAdvertisedName(device);
-  return advertisedName ? advertisedName.toLowerCase().includes(TARGET_NAME) : false;
+function isTestableDevice(device: Device): boolean {
+  return getAdvertisedName(device) !== null;
 }
 
 function toBallDevice(device: Device): BallDevice {
@@ -213,7 +212,7 @@ export async function scanForVisioballs(): Promise<BallDevice[]> {
             return;
           }
 
-          if (!scannedDevice || !matchesVisiobal(scannedDevice)) {
+          if (!scannedDevice || !isTestableDevice(scannedDevice)) {
             return;
           }
 
@@ -243,3 +242,5 @@ export async function connectToBall(device: BallDevice): Promise<boolean> {
   await connectedDevice.discoverAllServicesAndCharacteristics();
   return true;
 }
+
+

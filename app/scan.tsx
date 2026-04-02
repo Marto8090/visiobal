@@ -67,15 +67,15 @@ export default function ScanScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Nearby Visioballs</Text>
-      <Text style={styles.subtitle}>Searching for BLE devices whose name contains visiobal</Text>
+      <Text style={styles.title}>Nearby BLE Devices</Text>
+      <Text style={styles.subtitle}>Temporary test mode: showing all named BLE devices nearby</Text>
 
       {loading ? (
         <Text style={styles.info}>Scanning for devices...</Text>
       ) : errorMessage ? (
         <Text style={styles.info}>{errorMessage}</Text>
       ) : devices.length === 0 ? (
-        <Text style={styles.info}>No BLE devices named visiobal were found.</Text>
+        <Text style={styles.info}>No named BLE devices were found.</Text>
       ) : (
         <FlatList
           data={devices}
@@ -139,3 +139,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
