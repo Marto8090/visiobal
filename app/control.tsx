@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { FrequencySlider } from '@/src/components/FrequencySlider';
 import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 import {
   COMMAND_CHARACTERISTIC_UUID,
@@ -9,6 +10,13 @@ import {
 } from '@/src/services/bluetoothService';
 
 const PRESET_COMMANDS = ['ON', 'OFF'];
+const MIN_BLINK_FREQUENCY_HZ = 1;
+const MAX_BLINK_FREQUENCY_HZ = 10;
+const DEFAULT_BLINK_FREQUENCY_HZ = 3;
+
+function formatFrequencyCommand(frequencyHz: number) {
+  return `FREQ:${frequencyHz}`;
+}
 
 export default function ControlScreen() {
   const router = useRouter();
@@ -16,28 +24,68 @@ export default function ControlScreen() {
     useBluetoothSession();
 
   const [commandDraft, setCommandDraft] = useState('ON');
+  const [isLightOn, setIsLightOn] = useState(false);
+  const [blinkFrequencyHz, setBlinkFrequencyHz] = useState(DEFAULT_BLINK_FREQUENCY_HZ);
   const [sending, setSending] = useState(false);
   const [lastCommand, setLastCommand] = useState<string | null>(null);
 
-  const handleSendCommand = async (command: string) => {
+  const applyCommandSideEffects = (command: string) => {
+    const normalizedCommand = command.trim().toUpperCase();
+
+    if (normalizedCommand === 'ON') {
+      setIsLightOn(true);
+      return;
+    }
+
+    if (normalizedCommand === 'OFF') {
+      setIsLightOn(false);
+      return;
+    }
+
+    if (normalizedCommand.startsWith('FREQ:')) {
+      const parsedFrequency = Number.parseInt(normalizedCommand.slice('FREQ:'.length), 10);
+
+      if (!Number.isNaN(parsedFrequency)) {
+        setBlinkFrequencyHz(
+          Math.min(Math.max(parsedFrequency, MIN_BLINK_FREQUENCY_HZ), MAX_BLINK_FREQUENCY_HZ)
+        );
+      }
+    }
+  };
+
+  const handleSendCommand = async (command: string, successTitle = 'Command sent') => {
     const trimmedCommand = command.trim();
 
     if (!trimmedCommand) {
       Alert.alert('Missing command', 'Enter a command before sending.');
-      return;
+      return false;
     }
 
     try {
       setSending(true);
       await sendCommandToBall(trimmedCommand);
+      applyCommandSideEffects(trimmedCommand);
       setLastCommand(trimmedCommand);
-      Alert.alert('Command sent', `Sent "${trimmedCommand}" to ${connectedDevice?.name ?? 'the device'}.`);
+      Alert.alert(
+        successTitle,
+        `Sent "${trimmedCommand}" to ${connectedDevice?.name ?? 'the device'}.`
+      );
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not send the command.';
       Alert.alert('Command failed', message);
+      return false;
     } finally {
       setSending(false);
     }
+  };
+
+  const handleFrequencyCommit = async (frequencyHz: number) => {
+    if (!isLightOn || sending || !canSendCommands) {
+      return;
+    }
+
+    await handleSendCommand(formatFrequencyCommand(frequencyHz), 'Blink frequency updated');
   };
 
   const handleDisconnect = async () => {
@@ -91,6 +139,8 @@ export default function ControlScreen() {
             key={command}
             style={[
               styles.commandButton,
+              ((command === 'ON' && isLightOn) || (command === 'OFF' && !isLightOn)) &&
+                styles.commandButtonActive,
               (!canSendCommands || sending) && styles.commandButtonDisabled,
             ]}
             disabled={!canSendCommands || sending}
@@ -98,6 +148,31 @@ export default function ControlScreen() {
             <Text style={styles.buttonText}>{command}</Text>
           </Pressable>
         ))}
+      </View>
+
+      <Text style={styles.sectionTitle}>Blink Frequency</Text>
+      <Text style={styles.info}>
+        {isLightOn
+          ? `Selected: ${blinkFrequencyHz} Hz (${Math.round(1000 / blinkFrequencyHz)} ms interval)`
+          : 'Turn the light on first, then adjust how fast it blinks.'}
+      </Text>
+      <View style={styles.sliderCard}>
+        <View style={styles.sliderScale}>
+          <Text style={styles.scaleLabel}>{MIN_BLINK_FREQUENCY_HZ} Hz</Text>
+          <Text style={styles.scaleLabel}>{MAX_BLINK_FREQUENCY_HZ} Hz</Text>
+        </View>
+        <FrequencySlider
+          disabled={!canSendCommands || sending || !isLightOn}
+          maximumValue={MAX_BLINK_FREQUENCY_HZ}
+          minimumValue={MIN_BLINK_FREQUENCY_HZ}
+          onSlidingComplete={(value) => void handleFrequencyCommit(value)}
+          onValueChange={setBlinkFrequencyHz}
+          step={1}
+          value={blinkFrequencyHz}
+        />
+        <Text style={styles.noticeText}>
+          The slider sends `{formatFrequencyCommand(blinkFrequencyHz)}`.
+        </Text>
       </View>
 
       <Text style={styles.sectionTitle}>Custom Command</Text>
@@ -187,6 +262,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
+  commandButtonActive: {
+    backgroundColor: '#1d4ed8',
+    borderColor: '#93c5fd',
+    borderWidth: 1,
+  },
   input: {
     backgroundColor: '#1e1e1e',
     borderColor: '#334155',
@@ -210,6 +290,22 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingHorizontal: 18,
     paddingVertical: 14,
+  },
+  sliderCard: {
+    backgroundColor: '#1e1e1e',
+    borderColor: '#334155',
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 16,
+  },
+  sliderScale: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  scaleLabel: {
+    color: '#94a3b8',
+    fontSize: 13,
+    fontWeight: '500',
   },
   commandButton: {
     backgroundColor: '#2563eb',
