@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
+
 import { BallDevice } from '../types/bluetooth';
 
 type Props = {

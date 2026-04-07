@@ -2,14 +2,14 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import DeviceListItem from './components/deviceListItem';
-import { useBluetoothSession } from './hooks/useBluetoothSession';
+import DeviceListItem from '@/src/components/deviceListItem';
+import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 import {
   scanForVisioballs,
   stopScanning,
   TARGET_BLE_DEVICE_NAME,
-} from './services/bluetoothService';
-import { BallDevice } from './types/bluetooth';
+} from '@/src/services/bluetoothService';
+import { BallDevice } from '@/src/types/bluetooth';
 
 
 export default function ScanScreen() {

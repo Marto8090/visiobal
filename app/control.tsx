@@ -2,20 +2,20 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { useBluetoothSession } from './hooks/useBluetoothSession';
+import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 import {
   COMMAND_CHARACTERISTIC_UUID,
   COMMAND_SERVICE_UUID,
-} from './services/bluetoothService';
+} from '@/src/services/bluetoothService';
 
-const PRESET_COMMANDS = ['PING', 'START', 'STOP'];
+const PRESET_COMMANDS = ['ON', 'OFF'];
 
 export default function ControlScreen() {
   const router = useRouter();
   const { canSendCommands, connectedDevice, disconnectFromBall, isConnected, sendCommandToBall } =
     useBluetoothSession();
 
-  const [commandDraft, setCommandDraft] = useState('PING');
+  const [commandDraft, setCommandDraft] = useState('ON');
   const [sending, setSending] = useState(false);
   const [lastCommand, setLastCommand] = useState<string | null>(null);
 
@@ -76,7 +76,7 @@ export default function ControlScreen() {
         <View style={styles.noticeBox}>
           <Text style={styles.noticeTitle}>Command channel not configured</Text>
           <Text style={styles.noticeText}>
-            Set `COMMAND_SERVICE_UUID` and `COMMAND_CHARACTERISTIC_UUID` in `app/services/bluetoothService.ts`
+            Set `COMMAND_SERVICE_UUID` and `COMMAND_CHARACTERISTIC_UUID` in `src/services/bluetoothService.ts`
             to match your ESP32 BLE GATT characteristic.
           </Text>
           <Text style={styles.noticeText}>Service UUID: {String(COMMAND_SERVICE_UUID)}</Text>

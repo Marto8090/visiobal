@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { useBluetoothSession } from './hooks/useBluetoothSession';
+import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 
 export default function HomeScreen() {
   const router = useRouter();

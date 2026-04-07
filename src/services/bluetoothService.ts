@@ -1,13 +1,20 @@
 import { PermissionsAndroid, Platform } from 'react-native';
-import type { BleManager as BleManagerType, Device, Subscription } from 'react-native-ble-plx';
+import type {
+  BleManager as BleManagerType,
+  Characteristic,
+  Device,
+  Service,
+  Subscription,
+} from 'react-native-ble-plx';
 
 import { BallDevice } from '../types/bluetooth';
 
 const SCAN_DURATION_MS = 8000;
-export const TARGET_BLE_DEVICE_NAME = 'ESP32_BLE_Prototype - Clon';
-// Replace these with the UUIDs exposed by the ESP32 GATT service you want to write commands to.
-export const COMMAND_SERVICE_UUID: string | null = null;
-export const COMMAND_CHARACTERISTIC_UUID: string | null = null;
+const DISCONNECT_TIMEOUT_MS = 5000;
+const ADVERTISING_RECOVERY_MS = 1500;
+export const TARGET_BLE_DEVICE_NAME = 'ESP32_BLE_Prototype';
+export const COMMAND_SERVICE_UUID = '6E400001-B5A3-F393-E0A9-E50E24DCCA9E';
+export const COMMAND_CHARACTERISTIC_UUID = '6E400002-B5A3-F393-E0A9-E50E24DCCA9E';
 type BleRuntime = typeof import('react-native-ble-plx');
 export type BluetoothSessionSnapshot = {
   connectedDevice: BallDevice | null;
@@ -15,9 +22,17 @@ export type BluetoothSessionSnapshot = {
   canSendCommands: boolean;
 };
 
+type ScanCandidate = {
+  device: BallDevice;
+  rank: number;
+};
+
 let bleRuntime: BleRuntime | null = null;
 let bleManager: BleManagerType | null = null;
 let connectedDevice: Device | null = null;
+let lastKnownDeviceId: string | null = null;
+let lastDisconnectAt = 0;
+const verifiedDeviceIds = new Set<string>();
 let disconnectSubscription: Subscription | null = null;
 const sessionListeners = new Set<() => void>();
 let sessionSnapshot: BluetoothSessionSnapshot = {
@@ -45,6 +60,11 @@ function clearDisconnectSubscription() {
 
 function setConnectedDevice(nextDevice: Device | null) {
   connectedDevice = nextDevice;
+
+  if (nextDevice && hasExactTargetName(nextDevice)) {
+    lastKnownDeviceId = nextDevice.id;
+  }
+
   updateSessionSnapshot();
 
   clearDisconnectSubscription();
@@ -75,6 +95,20 @@ function bytesToBase64(bytes: Uint8Array): string {
   }
 
   return result;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function isOperationCancelledError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return error.message.toLowerCase().includes('cancel');
 }
 
 function encodeCommandPayload(command: string): string {
@@ -135,14 +169,46 @@ function getAdvertisedName(device: Device): string | null {
   return name ? name : null;
 }
 
-function isTestableDevice(device: Device): boolean {
-  return getAdvertisedName(device) === TARGET_BLE_DEVICE_NAME;
+function getLocalName(device: Device): string | null {
+  const localName = device.localName?.trim();
+  return localName ? localName : null;
+}
+
+function getDeviceName(device: Device): string | null {
+  const name = device.name?.trim();
+  return name ? name : null;
+}
+
+function hasExactTargetName(device: Device): boolean {
+  return (
+    getLocalName(device) === TARGET_BLE_DEVICE_NAME || getDeviceName(device) === TARGET_BLE_DEVICE_NAME
+  );
+}
+
+function normalizeUuid(uuid: string): string {
+  return uuid.toLowerCase();
+}
+
+function getScanMatchRank(device: Device): number {
+  if (verifiedDeviceIds.has(device.id) || device.id === lastKnownDeviceId) {
+    return 4;
+  }
+
+  if (getLocalName(device) === TARGET_BLE_DEVICE_NAME) {
+    return 3;
+  }
+
+  if (getDeviceName(device) === TARGET_BLE_DEVICE_NAME) {
+    return 2;
+  }
+
+  return 0;
 }
 
 function toBallDevice(device: Device): BallDevice {
   return {
     id: device.id,
-    name: getAdvertisedName(device) ?? 'Unnamed BLE device',
+    name: getAdvertisedName(device) ?? TARGET_BLE_DEVICE_NAME,
     localName: device.localName,
     rssi: device.rssi,
   };
@@ -155,6 +221,53 @@ function sortBySignalStrength(devices: BallDevice[]): BallDevice[] {
 
     return rightRssi - leftRssi;
   });
+}
+
+function toCachedBallDevice(deviceId: string): BallDevice {
+  return {
+    id: deviceId,
+    name: TARGET_BLE_DEVICE_NAME,
+    localName: TARGET_BLE_DEVICE_NAME,
+    rssi: null,
+  };
+}
+
+async function resolveCommandTarget(device: Device): Promise<{
+  characteristic: Characteristic;
+  refreshedDevice: Device;
+  service: Service;
+}> {
+  const refreshedDevice = await device.discoverAllServicesAndCharacteristics();
+  const services = await refreshedDevice.services();
+  const service = services.find(
+    (candidate) => normalizeUuid(candidate.uuid) === normalizeUuid(COMMAND_SERVICE_UUID)
+  );
+
+  if (!service) {
+    const availableServices = services.map((candidate) => candidate.uuid).join(', ') || 'none';
+    throw new Error(
+      `Command service not found on device. Expected ${COMMAND_SERVICE_UUID}. Found: ${availableServices}.`
+    );
+  }
+
+  const characteristics = await service.characteristics();
+  const characteristic = characteristics.find(
+    (candidate) => normalizeUuid(candidate.uuid) === normalizeUuid(COMMAND_CHARACTERISTIC_UUID)
+  );
+
+  if (!characteristic) {
+    const availableCharacteristics =
+      characteristics.map((candidate) => candidate.uuid).join(', ') || 'none';
+    throw new Error(
+      `Command characteristic not found on service ${service.uuid}. Expected ${COMMAND_CHARACTERISTIC_UUID}. Found: ${availableCharacteristics}.`
+    );
+  }
+
+  return {
+    characteristic,
+    refreshedDevice,
+    service,
+  };
 }
 
 export function getBluetoothSessionSnapshot(): BluetoothSessionSnapshot {
@@ -242,6 +355,43 @@ async function ensureBluetoothReady(): Promise<void> {
   });
 }
 
+async function waitForDeviceDisconnected(deviceId: string): Promise<void> {
+  const deadline = Date.now() + DISCONNECT_TIMEOUT_MS;
+
+  while (Date.now() < deadline) {
+    const stillConnected = await getBleManager().isDeviceConnected(deviceId);
+
+    if (!stillConnected) {
+      return;
+    }
+
+    await delay(250);
+  }
+
+  throw new Error(
+    'Bluetooth disconnect did not complete. The ESP32 may still be connected, so it will not advertise again yet.'
+  );
+}
+
+async function forceDisconnectIfLingering(deviceId: string): Promise<void> {
+  const manager = getBleManager();
+  const isStillConnected = await manager.isDeviceConnected(deviceId);
+
+  if (!isStillConnected) {
+    return;
+  }
+
+  await manager.cancelDeviceConnection(deviceId);
+  await waitForDeviceDisconnected(deviceId);
+  lastDisconnectAt = Date.now();
+}
+
+async function connectFresh(deviceId: string): Promise<Device> {
+  return getBleManager().connectToDevice(deviceId, {
+    timeout: 10000,
+  });
+}
+
 export async function stopScanning(): Promise<void> {
   if (!bleManager) {
     return;
@@ -258,9 +408,22 @@ export async function scanForVisioballs(): Promise<BallDevice[]> {
   await requestBluetoothPermissions();
   await ensureBluetoothReady();
 
+  if (lastKnownDeviceId) {
+    try {
+      await forceDisconnectIfLingering(lastKnownDeviceId);
+    } catch {
+      // Keep scanning and fall back to the cached device entry below.
+    }
+  }
+
+  const timeSinceDisconnect = Date.now() - lastDisconnectAt;
+  if (lastDisconnectAt > 0 && timeSinceDisconnect < ADVERTISING_RECOVERY_MS) {
+    await delay(ADVERTISING_RECOVERY_MS - timeSinceDisconnect);
+  }
+
   const ble = getBleRuntime();
   const manager = getBleManager();
-  const devices = new Map<string, BallDevice>();
+  const candidates = new Map<string, ScanCandidate>();
 
   return new Promise<BallDevice[]>((resolve, reject) => {
     let settled = false;
@@ -279,7 +442,25 @@ export async function scanForVisioballs(): Promise<BallDevice[]> {
         return;
       }
 
-      resolve(sortBySignalStrength([...devices.values()]));
+      const rankedCandidates = [...candidates.values()];
+      const highestRank = rankedCandidates.reduce(
+        (bestRank, candidate) => Math.max(bestRank, candidate.rank),
+        0
+      );
+      const visibleDevices = rankedCandidates
+        .filter((candidate) => candidate.rank === highestRank)
+        .map((candidate) => candidate.device);
+
+      if (
+        visibleDevices.length === 0 &&
+        lastKnownDeviceId &&
+        verifiedDeviceIds.has(lastKnownDeviceId)
+      ) {
+        resolve([toCachedBallDevice(lastKnownDeviceId)]);
+        return;
+      }
+
+      resolve(sortBySignalStrength(visibleDevices));
     };
 
     const timeoutId = setTimeout(() => {
@@ -299,11 +480,20 @@ export async function scanForVisioballs(): Promise<BallDevice[]> {
             return;
           }
 
-          if (!scannedDevice || !isTestableDevice(scannedDevice)) {
+          if (!scannedDevice) {
             return;
           }
 
-          devices.set(scannedDevice.id, toBallDevice(scannedDevice));
+          const rank = getScanMatchRank(scannedDevice);
+
+          if (rank === 0) {
+            return;
+          }
+
+          candidates.set(scannedDevice.id, {
+            device: toBallDevice(scannedDevice),
+            rank,
+          });
         }
       )
       .catch((error) => {
@@ -327,25 +517,38 @@ export async function connectToBall(device: BallDevice): Promise<boolean> {
     await disconnectFromBall();
   }
 
-  const isConnected = await manager.isDeviceConnected(device.id);
   let nextConnectedDevice: Device;
 
-  if (isConnected) {
-    const [existingDevice] = await manager.devices([device.id]);
+  try {
+    const isConnected = await manager.isDeviceConnected(device.id);
 
-    if (!existingDevice) {
-      throw new Error('The device is connected but could not be resolved.');
+    if (isConnected) {
+      await forceDisconnectIfLingering(device.id);
+      await delay(ADVERTISING_RECOVERY_MS);
     }
 
-    nextConnectedDevice = existingDevice;
-  } else {
-    nextConnectedDevice = await manager.connectToDevice(device.id, {
-      timeout: 10000,
-    });
+    nextConnectedDevice = await connectFresh(device.id);
+  } catch (error) {
+    if (!isOperationCancelledError(error)) {
+      throw error;
+    }
+
+    await forceDisconnectIfLingering(device.id).catch(() => {});
+    await delay(ADVERTISING_RECOVERY_MS);
+    nextConnectedDevice = await connectFresh(device.id);
   }
 
-  await nextConnectedDevice.discoverAllServicesAndCharacteristics();
-  setConnectedDevice(nextConnectedDevice);
+  const { refreshedDevice } = await resolveCommandTarget(nextConnectedDevice);
+
+  if (!hasExactTargetName(refreshedDevice) && device.name !== TARGET_BLE_DEVICE_NAME) {
+    throw new Error(
+      `Connected device name does not match ${TARGET_BLE_DEVICE_NAME}. Found ${getAdvertisedName(refreshedDevice) ?? device.name}.`
+    );
+  }
+
+  verifiedDeviceIds.add(refreshedDevice.id);
+  lastKnownDeviceId = refreshedDevice.id;
+  setConnectedDevice(refreshedDevice);
   return true;
 }
 
@@ -356,13 +559,11 @@ export async function disconnectFromBall(): Promise<void> {
 
   const deviceToDisconnect = connectedDevice;
 
-  try {
-    await getBleManager().cancelDeviceConnection(deviceToDisconnect.id);
-  } finally {
-    if (connectedDevice?.id === deviceToDisconnect.id) {
-      setConnectedDevice(null);
-    }
-  }
+  await getBleManager().cancelDeviceConnection(deviceToDisconnect.id);
+  await waitForDeviceDisconnected(deviceToDisconnect.id);
+  setConnectedDevice(null);
+  lastDisconnectAt = Date.now();
+  await delay(ADVERTISING_RECOVERY_MS);
 }
 
 export async function sendCommandToBall(command: string): Promise<void> {
@@ -379,11 +580,33 @@ export async function sendCommandToBall(command: string): Promise<void> {
     );
   }
 
-  await connectedDevice.writeCharacteristicWithResponseForService(
-    COMMAND_SERVICE_UUID,
-    COMMAND_CHARACTERISTIC_UUID,
-    encodeCommandPayload(command)
-  );
+  const { characteristic, refreshedDevice } = await resolveCommandTarget(connectedDevice);
+  setConnectedDevice(refreshedDevice);
+  const payload = encodeCommandPayload(command);
+
+  if (characteristic.isWritableWithResponse) {
+    await characteristic.writeWithResponse(payload);
+    return;
+  }
+
+  if (characteristic.isWritableWithoutResponse) {
+    await characteristic.writeWithoutResponse(payload);
+    return;
+  }
+
+  // Some BLE stacks report write flags unreliably, so try the service-based calls as a fallback.
+  try {
+    await refreshedDevice.writeCharacteristicWithResponseForService(
+      COMMAND_SERVICE_UUID,
+      COMMAND_CHARACTERISTIC_UUID,
+      payload
+    );
+    return;
+  } catch {
+    await refreshedDevice.writeCharacteristicWithoutResponseForService(
+      COMMAND_SERVICE_UUID,
+      COMMAND_CHARACTERISTIC_UUID,
+      payload
+    );
+  }
 }
-
-
