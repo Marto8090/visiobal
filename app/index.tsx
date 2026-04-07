@@ -1,17 +1,41 @@
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { useBluetoothSession } from './hooks/useBluetoothSession';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { connectedDevice, isConnected, disconnectFromBall } = useBluetoothSession();
+
+  const handleDisconnect = async () => {
+    try {
+      await disconnectFromBall();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Could not disconnect from the device.';
+
+      Alert.alert('Disconnect failed', message);
+    }
+  };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Visioball</Text>
-      <Text style={styles.status}>Status: Not connected</Text>
+      <Text style={styles.status}>
+        Status: {isConnected && connectedDevice ? `Connected to ${connectedDevice.name}` : 'Not connected'}
+      </Text>
 
-      <Pressable style={styles.button} onPress={() => router.push('/scan')}>
-        <Text style={styles.buttonText}>Connect to Ball</Text>
+      <Pressable
+        style={styles.button}
+        onPress={() => router.push(isConnected ? '/control' : '/scan')}>
+        <Text style={styles.buttonText}>{isConnected ? 'Open Controls' : 'Connect to Ball'}</Text>
       </Pressable>
+
+      {isConnected && (
+        <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => void handleDisconnect()}>
+          <Text style={styles.buttonText}>Disconnect</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -40,6 +64,11 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 24,
     borderRadius: 12,
+    minWidth: 200,
+  },
+  secondaryButton: {
+    backgroundColor: '#334155',
+    marginTop: 12,
   },
   buttonText: {
     color: 'white',

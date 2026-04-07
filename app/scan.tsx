@@ -2,14 +2,19 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-
 import DeviceListItem from './components/deviceListItem';
-import { connectToBall, scanForVisioballs, stopScanning } from './services/bluetoothService';
+import { useBluetoothSession } from './hooks/useBluetoothSession';
+import {
+  scanForVisioballs,
+  stopScanning,
+  TARGET_BLE_DEVICE_NAME,
+} from './services/bluetoothService';
 import { BallDevice } from './types/bluetooth';
 
 
 export default function ScanScreen() {
   const router = useRouter();
+  const { connectToBall } = useBluetoothSession();
 
   const [devices, setDevices] = useState<BallDevice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,7 +56,7 @@ export default function ScanScreen() {
 
       if (success) {
         Alert.alert('Connected', `Connected to ${device.name}`);
-        router.replace('/');
+        router.replace('/control');
       } else {
         Alert.alert('Failed', 'Could not connect to the ball.');
       }
@@ -68,14 +73,14 @@ export default function ScanScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Nearby BLE Devices</Text>
-      <Text style={styles.subtitle}>Temporary test mode: showing all named BLE devices nearby</Text>
+      <Text style={styles.subtitle}>Searching only for {TARGET_BLE_DEVICE_NAME}</Text>
 
       {loading ? (
         <Text style={styles.info}>Scanning for devices...</Text>
       ) : errorMessage ? (
         <Text style={styles.info}>{errorMessage}</Text>
       ) : devices.length === 0 ? (
-        <Text style={styles.info}>No named BLE devices were found.</Text>
+        <Text style={styles.info}>Device not found: {TARGET_BLE_DEVICE_NAME}</Text>
       ) : (
         <FlatList
           data={devices}
@@ -139,4 +144,3 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-
