@@ -31,6 +31,13 @@ export default function HomeScreen() {
         <Text style={styles.buttonText}>{isConnected ? 'Open Controls' : 'Connect to Ball'}</Text>
       </Pressable>
 
+      {/* --- NEW BUTTON: Skip Bluetooth for UI Testing --- */}
+      <Pressable
+        style={[styles.button, styles.testButton]}
+        onPress={() => router.push('/landing')}>
+        <Text style={styles.buttonText}>Test Landing Page (Skip BLE)</Text>
+      </Pressable>
+
       {isConnected && (
         <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => void handleDisconnect()}>
           <Text style={styles.buttonText}>Disconnect</Text>
@@ -65,14 +72,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 12,
     minWidth: 200,
+    alignItems: 'center', // Added to ensure text is centered in the button
   },
   secondaryButton: {
     backgroundColor: '#334155',
+    marginTop: 12,
+  },
+  testButton: {
+    backgroundColor: '#9333ea', // Distinct purple color for the testing button
     marginTop: 12,
   },
   buttonText: {
     color: 'white',
     fontSize: 18,
     fontWeight: '600',
+    textAlign: 'center',
   },
 });
