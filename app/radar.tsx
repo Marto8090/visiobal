@@ -1,36 +1,67 @@
-import React, { Suspense } from 'react';
-import { View, Text, StyleSheet, Pressable, Dimensions } from 'react-native';
+import React, { useEffect, useRef, Suspense } from 'react';
+import { View, Text, StyleSheet, Pressable, Dimensions, Animated } from 'react-native';
 import { Canvas } from '@react-three/fiber/native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { AnimatedRedSphere } from './landing'; // Reuse the ball component
+import { WarmVisioball } from './landing'; 
 
 const { width, height } = Dimensions.get('window');
 
 export default function RadarPage() {
   const router = useRouter();
+  
+  // React Native Animation for expanding radar rings
+  const ringAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(ringAnim, {
+        toValue: 1,
+        duration: 2500, // 2.5 seconds per pulse
+        useNativeDriver: true,
+      })
+    ).start();
+  }, []);
+
+  // Map animation values to scale and opacity
+  const ringScale = ringAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.5, 2] // Rings expand outward
+  });
+  const ringOpacity = ringAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.8, 0.3, 0] // Fade out as they expand
+  });
 
   return (
     <View style={styles.container}>
-      <Pressable style={styles.backButton} onPress={() => router.back()}>
-        <Ionicons name="arrow-back" size={28} color="#fff" />
-      </Pressable>
+      {/* HEADER */}
+      <View style={styles.header}>
+        <Pressable style={styles.backButton} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color="#1E3A8A" />
+        </Pressable>
+        <Text style={styles.searchingText}>Searching...</Text>
+        <View style={{ width: 40 }} />
+      </View>
 
-      <Text style={styles.searchingText}>Looking for Visioball...</Text>
+      <Text style={styles.subtitle}>Hold your Visioball nearby</Text>
 
+      {/* RADAR ANIMATION CENTER */}
       <View style={styles.radarContainer}>
-        {/* Fake Radar Rings */}
-        <View style={[styles.ring, styles.ring1]} />
-        <View style={[styles.ring, styles.ring2]} />
-        <View style={[styles.ring, styles.ring3]} />
         
-        {/* The 3D Ball inside the Radar */}
+        {/* Animated Blue Pulse */}
+        <Animated.View style={[styles.pulseRing, { 
+          transform: [{ scale: ringScale }], 
+          opacity: ringOpacity 
+        }]} />
+        
+        {/* The Warm 3D Ball */}
         <View style={styles.canvasWrapper}>
           <Suspense fallback={null}>
             <Canvas camera={{ position: [0, 0, 8] }}>
-              <ambientLight intensity={0.7} color="#ffffff" />
-              <directionalLight position={[10, 20, 10]} intensity={3} color="#ffffff" />
-              <AnimatedRedSphere />
+              <ambientLight intensity={0.9} color="#ffffff" />
+              <directionalLight position={[10, 10, 10]} intensity={2.5} color="#ffffff" />
+              <WarmVisioball />
             </Canvas>
           </Suspense>
         </View>
@@ -40,14 +71,14 @@ export default function RadarPage() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#050505', alignItems: 'center' },
-  backButton: { position: 'absolute', top: 60, left: 20, zIndex: 10 },
-  searchingText: { color: '#fff', fontSize: 22, fontWeight: 'bold', marginTop: 120, letterSpacing: 1 },
-  radarContainer: { width: width, height: height * 0.5, justifyContent: 'center', alignItems: 'center', marginTop: 40 },
-  canvasWrapper: { width: 250, height: 250, position: 'absolute', zIndex: 5 },
-  // CSS for static radar rings (you can animate these later with React Native Animated)
-  ring: { position: 'absolute', borderRadius: 999, borderWidth: 1, borderColor: '#E60000', opacity: 0.3 },
-  ring1: { width: 180, height: 180 },
-  ring2: { width: 280, height: 280 },
-  ring3: { width: 380, height: 380, opacity: 0.1 },
+  container: { flex: 1, backgroundColor: '#F4F8FC', alignItems: 'center' },
+  header: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 60 },
+  backButton: { backgroundColor: '#FFFFFF', padding: 10, borderRadius: 20, shadowColor: '#94A3B8', shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
+  searchingText: { color: '#1E3A8A', fontSize: 22, fontWeight: '800' },
+  subtitle: { color: '#64748B', fontSize: 16, marginTop: 12, fontWeight: '600' },
+  
+  radarContainer: { width: width, height: height * 0.6, justifyContent: 'center', alignItems: 'center', marginTop: 20 },
+  canvasWrapper: { width: 300, height: 300, position: 'absolute', zIndex: 5 },
+  
+  pulseRing: { position: 'absolute', width: 200, height: 200, borderRadius: 100, backgroundColor: '#3B82F6', zIndex: 1 },
 });
