@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Pressable,
@@ -11,7 +12,6 @@ import {
   View,
 } from 'react-native';
 
-import DeviceListItem from '@/src/components/deviceListItem';
 import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 import {
   scanForVisioballs,
@@ -20,32 +20,19 @@ import {
 } from '@/src/services/bluetoothService';
 import { BallDevice } from '@/src/types/bluetooth';
 
-const COLORS = {
-  background: '#F4F8FC',
-  surface: '#FFFFFF',
-  primary: '#2563EB',
-  primaryDark: '#1E3A8A',
-  primarySoft: '#DBEAFE',
-  text: '#0F172A',
-  textMuted: '#64748B',
-  border: '#D6DEE8',
-  card: '#F8FAFC',
-  success: '#22C55E',
-  successSoft: '#DCFCE7',
-  danger: '#DC2626',
-  shadow: '#0F172A',
-};
-
 export default function ScanScreen() {
   const router = useRouter();
-  const { connectToBall } = useBluetoothSession();
+  const { connectToBall, connectedDevice, isConnected } = useBluetoothSession();
 
   const [devices, setDevices] = useState<BallDevice[]>([]);
   const [loading, setLoading] = useState(true);
   const [connectingId, setConnectingId] = useState<string | null>(null);
+  const [connectedDeviceId, setConnectedDeviceId] = useState<string | null>(
+    isConnected ? connectedDevice?.id ?? null : null
+  );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const loadDevices = async () => {
+  const loadDevices = useCallback(async () => {
     setLoading(true);
     setErrorMessage(null);
     setDevices([]);
@@ -62,7 +49,7 @@ export default function ScanScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void loadDevices();
@@ -70,7 +57,13 @@ export default function ScanScreen() {
     return () => {
       void stopScanning();
     };
-  }, []);
+  }, [loadDevices]);
+
+  useEffect(() => {
+    if (isConnected && connectedDevice) {
+      setConnectedDeviceId(connectedDevice.id);
+    }
+  }, [connectedDevice, isConnected]);
 
   const handleConnect = async (device: BallDevice) => {
     try {
@@ -79,11 +72,11 @@ export default function ScanScreen() {
       const success = await connectToBall(device);
 
       if (success) {
-        Alert.alert('Connected', `Connected to ${device.name || 'Visioball'}`);
-        router.replace('/control');
-      } else {
-        Alert.alert('Failed', 'Could not connect to the ball.');
+        setConnectedDeviceId(device.id);
+        return;
       }
+
+      Alert.alert('Failed', 'Could not connect to the ball.');
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Something went wrong while connecting.';
@@ -94,22 +87,79 @@ export default function ScanScreen() {
     }
   };
 
-  const renderContent = () => {
+  const handleContinue = () => {
+    if (!connectedDeviceId) {
+      return;
+    }
+
+    router.replace('/control');
+  };
+
+  const renderDevice = ({ item }: { item: BallDevice }) => {
+    const isRowConnected = connectedDeviceId === item.id;
+    const isConnecting = connectingId === item.id;
+    const isDisabled = connectingId !== null || isRowConnected;
+    const deviceName = item.name?.trim() || TARGET_BLE_DEVICE_NAME;
+
+    return (
+      <View style={styles.deviceRow}>
+        <View style={styles.deviceTextBlock}>
+          <Text style={styles.deviceId} numberOfLines={1}>
+            {item.id}
+          </Text>
+          <Text style={styles.deviceName} numberOfLines={1}>
+            {deviceName}
+            {item.rssi != null ? ` | ${item.rssi} dBm` : ''}
+          </Text>
+        </View>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.connectButton,
+            isRowConnected && styles.connectedButton,
+            isDisabled && !isRowConnected && styles.connectButtonDisabled,
+            pressed && !isDisabled && styles.buttonPressed,
+          ]}
+          onPress={() => void handleConnect(item)}
+          disabled={isDisabled}
+        >
+          <Text style={[styles.connectButtonText, isRowConnected && styles.connectedButtonText]}>
+            {isRowConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Connect'}
+          </Text>
+        </Pressable>
+      </View>
+    );
+  };
+
+  const renderDeviceArea = () => {
     if (loading) {
-      return <Text style={styles.infoText}>Scanning for nearby devices...</Text>;
+      return (
+        <View style={styles.messageCard}>
+          <ActivityIndicator color={COLORS.green} />
+          <Text style={styles.messageText}>Scanning for {TARGET_BLE_DEVICE_NAME}...</Text>
+        </View>
+      );
     }
 
     if (errorMessage) {
-      return <Text style={styles.errorText}>{errorMessage}</Text>;
+      return (
+        <View style={styles.messageCard}>
+          <Text style={styles.errorText}>{errorMessage}</Text>
+          <Pressable style={styles.inlineButton} onPress={() => void loadDevices()}>
+            <Text style={styles.inlineButtonText}>Scan Again</Text>
+          </Pressable>
+        </View>
+      );
     }
 
     if (devices.length === 0) {
       return (
-        <View style={styles.emptyState}>
+        <View style={styles.messageCard}>
           <Text style={styles.emptyTitle}>No Visioball found</Text>
-          <Text style={styles.emptySubtitle}>
-            We only search for devices named {TARGET_BLE_DEVICE_NAME}.
-          </Text>
+          <Text style={styles.messageText}>Move closer to the ESP32 and try scanning again.</Text>
+          <Pressable style={styles.inlineButton} onPress={() => void loadDevices()}>
+            <Text style={styles.inlineButtonText}>Scan Again</Text>
+          </Pressable>
         </View>
       );
     }
@@ -118,53 +168,52 @@ export default function ScanScreen() {
       <FlatList
         data={devices}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
+        renderItem={renderDevice}
+        scrollEnabled={devices.length > 5}
         showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => (
-          <DeviceListItem
-            device={item}
-            onPress={handleConnect}
-            isConnecting={connectingId === item.id}
-            disabled={connectingId !== null}
-          />
-        )}
       />
     );
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+
       <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Connect to the Visioball</Text>
-          <Text style={styles.subtitle}>
-            Searching only for {TARGET_BLE_DEVICE_NAME}
+        <Text style={styles.title}>Connect to the{'\n'}visioBall</Text>
+
+        <View style={styles.panel}>
+          <Text style={styles.scanningText}>
+            {loading ? 'Searching for nearby devices...' : 'Nearby devices'}
           </Text>
-        </View>
 
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
-
-          <Text style={styles.sectionLabel}>Nearby devices</Text>
-
-          <View style={styles.bluetoothIconWrap}>
-            <Text style={styles.bluetoothIcon}>⌁</Text>
+          <View style={styles.ballBeacon}>
+            <View style={styles.beaconGlow} />
+            <View style={styles.beaconCore}>
+              <Text style={styles.beaconText}>B</Text>
+            </View>
           </View>
 
-          <View style={styles.content}>{renderContent()}</View>
+          <View style={styles.divider} />
+
+          <View style={styles.devicesArea}>{renderDeviceArea()}</View>
 
           <Pressable
             style={({ pressed }) => [
-              styles.scanButton,
-              (loading || connectingId !== null) && styles.scanButtonDisabled,
-              pressed && !loading && connectingId === null && styles.scanButtonPressed,
+              styles.continueButton,
+              !connectedDeviceId && styles.continueButtonDisabled,
+              pressed && connectedDeviceId && styles.buttonPressed,
             ]}
-            onPress={() => void loadDevices()}
-            disabled={loading || connectingId !== null}
+            onPress={handleContinue}
+            disabled={!connectedDeviceId}
           >
-            <Text style={styles.scanButtonText}>
-              {loading ? 'Scanning...' : 'Scan Again'}
+            <Text
+              style={[
+                styles.continueButtonText,
+                !connectedDeviceId && styles.continueButtonTextDisabled,
+              ]}
+            >
+              Continue
             </Text>
           </Pressable>
         </View>
@@ -172,6 +221,22 @@ export default function ScanScreen() {
     </SafeAreaView>
   );
 }
+
+const COLORS = {
+  background: '#080F1E',
+  panel: '#10182A',
+  row: '#1C273A',
+  rowPressed: '#24324B',
+  green: '#28E27F',
+  greenDeep: '#052D1B',
+  greenSoft: '#7EF7B2',
+  text: '#F5F8FF',
+  muted: '#97A1B5',
+  line: '#233047',
+  button: '#25314A',
+  buttonDisabled: '#1B2537',
+  danger: '#FF7A8A',
+};
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -181,119 +246,179 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 20,
-    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingTop: 52,
+    paddingBottom: 24,
   },
   title: {
-    color: COLORS.text,
-    fontSize: 30,
-    fontWeight: '700',
-    textAlign: 'center',
-    lineHeight: 38,
-  },
-  subtitle: {
-    color: COLORS.textMuted,
-    fontSize: 15,
-    marginTop: 8,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  sheet: {
-    flex: 1,
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 24,
-    shadowColor: COLORS.shadow,
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: -6 },
-    elevation: 10,
-  },
-  handle: {
     alignSelf: 'center',
-    width: 52,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: '#CBD5E1',
-    marginBottom: 16,
+    maxWidth: 280,
+    color: COLORS.text,
+    fontSize: 26,
+    fontWeight: '900',
+    lineHeight: 33,
+    textAlign: 'center',
+    letterSpacing: -0.3,
+    marginBottom: 46,
   },
-  sectionLabel: {
-    color: COLORS.textMuted,
+  panel: {
+    flex: 1,
+    backgroundColor: COLORS.panel,
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 24,
+    paddingBottom: 28,
+  },
+  scanningText: {
+    color: COLORS.muted,
     fontSize: 14,
-    marginBottom: 16,
+    fontWeight: '500',
   },
-  bluetoothIconWrap: {
+  ballBeacon: {
+    height: 84,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
   },
-  bluetoothIcon: {
-    fontSize: 42,
-    color: COLORS.primary,
-    fontWeight: '700',
+  beaconGlow: {
+    position: 'absolute',
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: 'rgba(40, 226, 127, 0.14)',
   },
-  content: {
+  beaconCore: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#123D29',
+  },
+  beaconText: {
+    color: COLORS.green,
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.line,
+    marginBottom: 14,
+  },
+  devicesArea: {
     flex: 1,
+    minHeight: 220,
   },
-  listContent: {
-    paddingBottom: 8,
+  deviceRow: {
+    minHeight: 54,
+    borderRadius: 10,
+    backgroundColor: COLORS.row,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginBottom: 12,
   },
-  infoText: {
-    color: COLORS.textMuted,
-    fontSize: 16,
+  deviceTextBlock: {
+    flex: 1,
+    marginRight: 12,
+  },
+  deviceId: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  deviceName: {
+    color: COLORS.muted,
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  connectButton: {
+    minWidth: 82,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.button,
+  },
+  connectButtonDisabled: {
+    backgroundColor: COLORS.buttonDisabled,
+  },
+  connectedButton: {
+    backgroundColor: COLORS.green,
+  },
+  connectButtonText: {
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  connectedButtonText: {
+    color: '#03140B',
+  },
+  messageCard: {
+    minHeight: 150,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+    backgroundColor: 'rgba(28, 39, 58, 0.64)',
+    padding: 20,
+  },
+  messageText: {
+    color: COLORS.muted,
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 21,
     textAlign: 'center',
-    marginTop: 12,
+    marginTop: 10,
   },
   errorText: {
     color: COLORS.danger,
-    fontSize: 15,
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 21,
     textAlign: 'center',
-    marginTop: 12,
-    lineHeight: 22,
-  },
-  emptyState: {
-    backgroundColor: COLORS.card,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 18,
-    marginTop: 8,
   },
   emptyTitle: {
     color: COLORS.text,
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 6,
+    fontSize: 17,
+    fontWeight: '900',
   },
-  emptySubtitle: {
-    color: COLORS.textMuted,
-    fontSize: 14,
-    lineHeight: 21,
+  inlineButton: {
+    marginTop: 18,
+    borderRadius: 12,
+    backgroundColor: COLORS.button,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
   },
-  scanButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 16,
-    paddingVertical: 16,
+  inlineButtonText: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  continueButton: {
+    height: 54,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: COLORS.row,
     marginTop: 18,
   },
-  scanButtonDisabled: {
-    backgroundColor: '#94A3B8',
+  continueButtonDisabled: {
+    backgroundColor: COLORS.buttonDisabled,
   },
-  scanButtonPressed: {
-    opacity: 0.9,
-  },
-  scanButtonText: {
-    color: '#FFFFFF',
+  continueButtonText: {
+    color: COLORS.text,
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: '900',
+    letterSpacing: 0.2,
+  },
+  continueButtonTextDisabled: {
+    color: COLORS.muted,
+  },
+  buttonPressed: {
+    opacity: 0.85,
+    backgroundColor: COLORS.rowPressed,
+    transform: [{ scale: 0.98 }],
   },
 });
