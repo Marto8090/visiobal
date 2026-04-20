@@ -3,12 +3,12 @@ import { Canvas } from "@react-three/fiber/native";
 import { useRouter } from "expo-router";
 import React, { Suspense, useEffect, useRef } from "react";
 import {
-    Animated,
-    Dimensions,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  Animated,
+  Dimensions,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { TexturedVisioball } from "./landing";
 
