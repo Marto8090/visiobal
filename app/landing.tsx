@@ -3,33 +3,100 @@ import {
   View, Text, StyleSheet, Pressable, Dimensions, Modal, ActivityIndicator 
 } from 'react-native';
 import { Canvas, useFrame } from '@react-three/fiber/native';
-import { Mesh } from 'three';
+import { Mesh, MathUtils, MeshBasicMaterial } from 'three';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+
 
 const { width, height } = Dimensions.get('window');
 
-// --- THE WARM RED/ORANGE 3D BALL ---
-export function WarmVisioball() {
-  const meshRef = useRef<Mesh>(null);
+// --- THE UPGRADED 3D BALL WITH TEXTURE & DEPTH ---
+export function TexturedVisioball() {
+  const coreRef = useRef<Mesh>(null);
+  const textureShellRef = useRef<Mesh>(null);
+  const shadowRef = useRef<Mesh>(null);
+
   useFrame((state, delta) => {
-    if (meshRef.current) {
-      meshRef.current.rotation.y += delta * 0.5; // Smooth horizontal rotation
-      meshRef.current.rotation.z += delta * 0.1; // Gentle tilt
+    const time = state.clock.getElapsedTime();
+    
+    // Smooth, dynamic rotation
+    if (coreRef.current && textureShellRef.current) {
+      coreRef.current.rotation.y += delta * 0.4;
+      coreRef.current.rotation.x += delta * 0.1;
+      
+      // The outer textured shell rotates slightly differently for a complex 3D effect
+      textureShellRef.current.rotation.y += delta * 0.42;
+      textureShellRef.current.rotation.x += delta * 0.12;
+    }
+
+    // Make the ball gently hover up and down
+    const hoverOffset = Math.sin(time * 2) * 0.15;
+    if (coreRef.current) coreRef.current.position.y = hoverOffset;
+    if (textureShellRef.current) textureShellRef.current.position.y = hoverOffset;
+    
+    // Animate the shadow scaling as the ball hovers
+    // Animate the shadow scaling as the ball hovers
+    if (shadowRef.current) {
+      shadowRef.current.scale.setScalar(1 - hoverOffset * 0.5);
+      // Tell TypeScript this is a BasicMaterial so it knows 'opacity' exists
+      (shadowRef.current.material as MeshBasicMaterial).opacity = MathUtils.lerp(0.3, 0.1, (hoverOffset + 0.15) / 0.3);
     }
   });
 
   return (
-    <mesh ref={meshRef}>
-      <sphereGeometry args={[2.5, 64, 64]} />
-      <meshStandardMaterial 
-        color="#FF6B6B" // Light reddish coral
-        emissive="#FFA07A" // Light orange glow
-        emissiveIntensity={0.6}
-        roughness={0.1} // Glossy
-        metalness={0.4}
-      />
-    </mesh>
+    <group>
+      {/* 1. The Inner Core (Highly reflective, smooth surface) */}
+      <mesh ref={coreRef}>
+        <sphereGeometry args={[2.4, 64, 64]} />
+        <meshPhysicalMaterial 
+          color="#FF5A5F" 
+          emissive="#FF4500"
+          emissiveIntensity={0.2}
+          roughness={0.1}
+          metalness={0.6}
+          clearcoat={1.0} // Gives it a premium polished finish
+          clearcoatRoughness={0.1}
+        />
+      </mesh>
+
+      {/* 2. The Texture Overlay (Creates a physical geometric grid on the surface) */}
+      <mesh ref={textureShellRef}>
+        {/* Icosahedron creates a beautiful triangular geodesic mesh */}
+        <icosahedronGeometry args={[2.42, 4]} />
+        <meshStandardMaterial 
+          color="#ffffff"
+          wireframe={true}
+          transparent={true}
+          opacity={0.15}
+        />
+      </mesh>
+
+      {/* 3. The Ground Shadow (Grounds the ball in 3D space) */}
+      <mesh ref={shadowRef} position={[0, -3.5, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[2.5, 32]} />
+        <meshBasicMaterial color="#000000" transparent opacity={0.3} />
+      </mesh>
+    </group>
+  );
+}
+
+// --- FLOATING BACKGROUND PARTICLES ---
+function BackgroundDust() {
+  const pointsRef = useRef<any>(null);
+  
+  useFrame((state, delta) => {
+    if (pointsRef.current) {
+      pointsRef.current.rotation.y -= delta * 0.05;
+      pointsRef.current.rotation.x -= delta * 0.02;
+    }
+  });
+
+  return (
+    <points ref={pointsRef}>
+      <sphereGeometry args={[10, 32, 32]} />
+      <pointsMaterial color="#3B82F6" size={0.05} transparent opacity={0.4} />
+    </points>
   );
 }
 
@@ -45,6 +112,12 @@ export default function LandingPage() {
 
   return (
     <View style={styles.container}>
+      {/* 3D CANVAS WRAPPED IN A GRADIENT BACKGROUND */}
+      <LinearGradient 
+        colors={['#E0F2FE', '#F8FAFC', '#FFFFFF']} 
+        style={StyleSheet.absoluteFillObject} 
+      />
+
       {/* HEADER */}
       <View style={styles.header}>
         <Text style={styles.title}>VISIOBALL</Text>
@@ -56,11 +129,17 @@ export default function LandingPage() {
       {/* CENTER 3D CANVAS */}
       <View style={styles.canvasWrapper}>
         <Suspense fallback={<ActivityIndicator size="large" color="#3B82F6" />}>
-          <Canvas camera={{ position: [0, 0, 7] }}>
-            <ambientLight intensity={0.9} color="#ffffff" />
+          <Canvas camera={{ position: [0, 0, 9], fov: 45 }}>
+            <ambientLight intensity={0.8} color="#ffffff" />
+            {/* Main Key Light */}
             <directionalLight position={[10, 10, 10]} intensity={2.5} color="#ffffff" />
-            <directionalLight position={[-10, -10, 5]} intensity={1} color="#FFDAB9" />
-            <WarmVisioball />
+            {/* Warm Rim Light from behind */}
+            <directionalLight position={[-10, 5, -10]} intensity={3} color="#FFDAB9" />
+            {/* Cool Fill Light from bottom */}
+            <directionalLight position={[0, -10, 5]} intensity={1} color="#3B82F6" />
+            
+            <BackgroundDust />
+            <TexturedVisioball />
           </Canvas>
         </Suspense>
       </View>
@@ -155,15 +234,15 @@ export default function LandingPage() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F8FC', justifyContent: 'space-between' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, paddingTop: 60 },
+  container: { flex: 1, backgroundColor: '#F8FAFC', justifyContent: 'space-between' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, paddingTop: 60, zIndex: 10 },
   title: { color: '#1E3A8A', fontSize: 28, fontWeight: '900', letterSpacing: 1 },
-  powerBtn: { backgroundColor: '#DBEAFE', padding: 12, borderRadius: 20 },
+  powerBtn: { backgroundColor: '#FFFFFF', padding: 12, borderRadius: 20, shadowColor: '#94A3B8', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.15, shadowRadius: 8, elevation: 4 },
   
-  canvasWrapper: { width: width, height: height * 0.5 },
+  canvasWrapper: { position: 'absolute', top: 0, left: 0, width: width, height: height * 0.75 },
   
-  bottomSection: { padding: 24, paddingBottom: 40, alignItems: 'center' },
-  helperText: { color: '#64748B', fontSize: 14, marginBottom: 20, fontWeight: '600' },
+  bottomSection: { padding: 24, paddingBottom: 40, alignItems: 'center', zIndex: 10 },
+  helperText: { color: '#475569', fontSize: 14, marginBottom: 20, fontWeight: '700' },
   actionRow: { flexDirection: 'row', gap: 16, width: '100%' },
   primaryBtn: { flex: 1, backgroundColor: '#3B82F6', flexDirection: 'row', padding: 20, borderRadius: 24, justifyContent: 'center', alignItems: 'center', shadowColor: '#3B82F6', shadowOffset: {width: 0, height: 8}, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
   primaryBtnText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
