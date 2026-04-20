@@ -1,112 +1,15 @@
-import React, { useRef, useState, Suspense } from 'react';
+import React, { useState, Suspense } from 'react';
 import { 
   View, Text, StyleSheet, Pressable, Dimensions, Modal, ActivityIndicator 
 } from 'react-native';
-import { Canvas, useFrame } from '@react-three/fiber/native';
-import { Mesh, MathUtils, PointLight } from 'three';
+import { Canvas } from '@react-three/fiber/native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import { BackgroundDust, TexturedVisioball } from '@/src/components/VisioballModel';
+
 const { width, height } = Dimensions.get('window');
-
-// --- THE ULTRA-PREMIUM 3D BALL (Mobile Sized) ---
-export function TexturedVisioball() {
-  const coreRef = useRef<Mesh>(null);
-  const textureShellRef = useRef<Mesh>(null);
-  const shadowRef = useRef<Mesh>(null);
-  const orbitLightRef = useRef<PointLight>(null);
-
-  useFrame((state, delta) => {
-    const time = state.clock.getElapsedTime();
-    
-    if (coreRef.current && textureShellRef.current) {
-      // Core rotates smoothly
-      coreRef.current.rotation.y += delta * 0.3;
-      coreRef.current.rotation.x = Math.sin(time * 0.5) * 0.1; 
-      
-      // Outer shell counter-rotates for an incredible parallax 3D effect
-      textureShellRef.current.rotation.y -= delta * 0.15;
-      textureShellRef.current.rotation.x = Math.cos(time * 0.4) * 0.15;
-    }
-
-    // Dynamic Orbit Light: Revolves around the ball to create moving reflections
-    if (orbitLightRef.current) {
-      orbitLightRef.current.position.x = Math.sin(time) * 4;
-      orbitLightRef.current.position.z = Math.cos(time) * 4;
-      orbitLightRef.current.position.y = Math.sin(time * 1.5) * 2;
-    }
-
-    // Smooth, deep breathing hover effect
-    const hoverOffset = Math.sin(time * 1.5) * 0.2;
-    if (coreRef.current) coreRef.current.position.y = hoverOffset;
-    if (textureShellRef.current) textureShellRef.current.position.y = hoverOffset;
-    
-    // Shadow reacts to the hover
-    if (shadowRef.current) {
-      shadowRef.current.scale.setScalar(1 - hoverOffset * 0.4);
-      (shadowRef.current.material as any).opacity = MathUtils.lerp(0.25, 0.05, (hoverOffset + 0.2) / 0.4);
-    }
-  });
-
-  return (
-    <group>
-      {/* Dynamic Moving Light */}
-      <pointLight ref={orbitLightRef} color="#FFFFFF" intensity={3} distance={10} />
-
-      {/* 1. Inner Core: Much smaller for mobile (1.3 radius) */}
-      <mesh ref={coreRef}>
-        <sphereGeometry args={[1.3, 64, 64]} />
-        <meshPhysicalMaterial 
-          color="#FF4757" // Richer, deeper coral red
-          emissive="#FF6B81" 
-          emissiveIntensity={0.3}
-          roughness={0.05} // Almost like glass
-          metalness={0.5}
-          clearcoat={1.0} 
-          clearcoatRoughness={0.1}
-        />
-      </mesh>
-
-      {/* 2. Texture Shell: Perfectly wraps the smaller core */}
-      <mesh ref={textureShellRef}>
-        <icosahedronGeometry args={[1.32, 4]} />
-        <meshStandardMaterial 
-          color="#ffffff"
-          wireframe={true}
-          transparent={true}
-          opacity={0.12}
-        />
-      </mesh>
-
-      {/* 3. Soft Ground Shadow */}
-      <mesh ref={shadowRef} position={[0, -2.2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[1.5, 32]} />
-        <meshBasicMaterial color="#1E3A8A" transparent opacity={0.2} />
-      </mesh>
-    </group>
-  );
-}
-
-// --- DEEP SPACE FLOATING DUST ---
-function BackgroundDust() {
-  const pointsRef = useRef<any>(null);
-  
-  useFrame((state, delta) => {
-    if (pointsRef.current) {
-      // Particles slowly drift upwards and rotate
-      pointsRef.current.rotation.y -= delta * 0.03;
-      pointsRef.current.position.y = Math.sin(state.clock.getElapsedTime() * 0.1) * 0.5;
-    }
-  });
-
-  return (
-    <points ref={pointsRef}>
-      <sphereGeometry args={[8, 48, 48]} />
-      <pointsMaterial color="#3B82F6" size={0.04} transparent opacity={0.5} sizeAttenuation={true} />
-    </points>
-  );
-}
 
 export default function LandingPage() {
   const router = useRouter();

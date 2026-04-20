@@ -10,7 +10,8 @@ import {
   Text,
   View,
 } from "react-native";
-import { TexturedVisioball } from "./landing";
+
+import { TexturedVisioball } from "@/src/components/VisioballModel";
 
 const { width, height } = Dimensions.get("window");
 
