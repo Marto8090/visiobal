@@ -28,12 +28,42 @@ function clamp(value: number, minimumValue: number, maximumValue: number) {
   return Math.min(Math.max(value, minimumValue), maximumValue);
 }
 
+type QuickControlTileProps = {
+  accentColor: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+  subtitle: string;
+  title: string;
+};
+
+function QuickControlTile({
+  accentColor,
+  icon,
+  onPress,
+  subtitle,
+  title,
+}: QuickControlTileProps) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.quickControlTile, pressed && styles.pressed]}>
+      <View style={[styles.quickControlIcon, { backgroundColor: `${accentColor}22` }]}>
+        <Ionicons color={accentColor} name={icon} size={20} />
+      </View>
+      <Ionicons color="#7e8799" name="chevron-forward" size={18} style={styles.quickControlChevron} />
+      <View style={styles.quickControlTextBlock}>
+        <Text style={styles.quickControlTitle}>{title}</Text>
+        <Text style={styles.quickControlSubtitle}>{subtitle}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
 export default function ControlScreen() {
   const router = useRouter();
   const { canSendCommands, connectedDevice, disconnectFromBall, isConnected, sendCommandToBall } =
     useBluetoothSession();
 
   const [commandDraft, setCommandDraft] = useState('STATUS?');
+  const [developerPanelVisible, setDeveloperPanelVisible] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [quickMenuVisible, setQuickMenuVisible] = useState(false);
   const [sending, setSending] = useState(false);
@@ -66,6 +96,7 @@ export default function ControlScreen() {
 
   const deviceReady = isConnected && Boolean(connectedDevice);
   const commandEnabled = deviceReady && canSendCommands && !sending;
+  const deviceSuffix = connectedDevice?.id ? connectedDevice.id.slice(-2).toUpperCase() : '--';
 
   const sendCoreCommand = async (command: 'ON' | 'OFF') => {
     if (!deviceReady) {
@@ -128,10 +159,13 @@ export default function ControlScreen() {
   };
 
   const handleDisconnect = async () => {
+    setIsPlaying(false);
+    setQuickMenuVisible(false);
+    setDeveloperPanelVisible(false);
+    router.replace('/scan' as Href);
+
     try {
       await disconnectFromBall();
-      setIsPlaying(false);
-      setQuickMenuVisible(false);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Could not disconnect from the device.';
@@ -249,78 +283,139 @@ export default function ControlScreen() {
         visible={quickMenuVisible}>
         <View style={styles.modalOverlay}>
           <View style={styles.quickSheet}>
-            <View style={styles.sheetHandle} />
-            <View style={styles.sheetHeader}>
-              <View>
-                <Text style={styles.sheetTitle}>Quick menu</Text>
-                <Text style={styles.sheetSubtitle}>
-                  {connectedDevice?.name ?? 'No ball connected'}
-                </Text>
-              </View>
-              <Pressable onPress={() => setQuickMenuVisible(false)} style={styles.closeButton}>
-                <Ionicons color="#9ca3af" name="close" size={22} />
-              </Pressable>
+            <Pressable
+              onPress={() => {
+                setQuickMenuVisible(false);
+                setDeveloperPanelVisible(false);
+              }}
+              style={({ pressed }) => [styles.sheetTopButton, pressed && styles.pressed]}>
+              <Ionicons color="#7e8799" name="arrow-down" size={20} />
+            </Pressable>
+
+            <View style={styles.quickControlsHeader}>
+              <Text style={styles.sheetTitle}>Controls</Text>
+              <Text style={styles.sheetSubtitle}>CricTrack v2 - Device {deviceSuffix}</Text>
             </View>
 
-            <View style={styles.menuGrid}>
-              <Pressable
-                onPress={() => {
+            <Pressable
+              onPress={() => {
+                if (!deviceReady) {
                   setQuickMenuVisible(false);
                   router.replace('/scan' as Href);
-                }}
-                style={({ pressed }) => [styles.menuButton, pressed && styles.pressed]}>
-                <Ionicons color="#8fffc1" name="scan" size={24} />
-                <Text style={styles.menuButtonText}>Scan</Text>
-              </Pressable>
+                }
+              }}
+              style={({ pressed }) => [styles.quickDeviceCard, pressed && styles.pressed]}>
+              <View style={styles.quickBallIcon}>
+                <View style={styles.quickBallLine} />
+              </View>
+              <View style={styles.quickDeviceTextBlock}>
+                <Text style={styles.quickDeviceTitle}>VisioBall</Text>
+                <Text style={styles.quickDeviceSubtitle}>
+                  {deviceReady ? 'Connected - 79% battery' : 'Disconnected - tap to scan'}
+                </Text>
+              </View>
+              <View style={[styles.quickDeviceDot, !deviceReady && styles.quickDeviceDotOffline]} />
+            </Pressable>
 
-              <Pressable
+            <View style={styles.quickControlsGrid}>
+              <QuickControlTile
+                accentColor="#15b7a5"
+                icon="musical-notes"
                 onPress={() => {
                   setQuickMenuVisible(false);
+                  setDeveloperPanelVisible(false);
                   router.push('/sound' as Href);
                 }}
-                style={({ pressed }) => [styles.menuButton, pressed && styles.pressed]}>
-                <Ionicons color="#8fffc1" name="musical-notes" size={24} />
-                <Text style={styles.menuButtonText}>Sound</Text>
-              </Pressable>
-
-              <Pressable
-                disabled={!deviceReady}
-                onPress={() => void handleDisconnect()}
-                style={({ pressed }) => [
-                  styles.menuButton,
-                  !deviceReady && styles.menuButtonDisabled,
-                  pressed && styles.pressed,
-                ]}>
-                <Ionicons color="#8fffc1" name="power" size={24} />
-                <Text style={styles.menuButtonText}>Disconnect</Text>
-              </Pressable>
-            </View>
-
-            <Text style={styles.devLabel}>Developer command</Text>
-            <View style={styles.commandRow}>
-              <TextInput
-                autoCapitalize="characters"
-                autoCorrect={false}
-                editable={!sending}
-                onChangeText={setCommandDraft}
-                placeholder="STATUS?"
-                placeholderTextColor="#6b7280"
-                style={styles.commandInput}
-                value={commandDraft}
+                subtitle="EQ - bass - mix"
+                title="Audio settings"
               />
-              <Pressable
-                disabled={!commandEnabled}
-                onPress={() => void handleSendCustomCommand()}
-                style={({ pressed }) => [
-                  styles.sendButton,
-                  !commandEnabled && styles.sendButtonDisabled,
-                  pressed && styles.pressed,
-                ]}>
-                <Ionicons color="#05100b" name="send" size={18} />
-              </Pressable>
+
+              <QuickControlTile
+                accentColor="#d76a15"
+                icon="locate"
+                onPress={() => {
+                  setQuickMenuVisible(false);
+                  setDeveloperPanelVisible(false);
+                  router.push('/radar' as Href);
+                }}
+                subtitle="Radar - GPS"
+                title="Locate ball"
+              />
+
+              <QuickControlTile
+                accentColor="#c62f6c"
+                icon="diamond"
+                onPress={() => setDeveloperPanelVisible((current) => !current)}
+                subtitle="Alerts - device"
+                title="App settings"
+              />
             </View>
 
-            {lastCommand && <Text style={styles.lastCommand}>Last command: {lastCommand}</Text>}
+            <Pressable
+              onPress={() => setSleepMode((current) => !current)}
+              style={({ pressed }) => [styles.quickSleepRow, pressed && styles.pressed]}>
+              <Text style={styles.quickSleepText}>Sleep mode</Text>
+              <View style={[styles.quickSwitchTrack, sleepMode && styles.quickSwitchTrackActive]}>
+                <View style={[styles.quickSwitchThumb, sleepMode && styles.quickSwitchThumbActive]} />
+              </View>
+            </Pressable>
+
+            {developerPanelVisible && (
+              <View style={styles.settingsPanel}>
+                <View style={styles.settingsActions}>
+                  <Pressable
+                    onPress={() => {
+                      setQuickMenuVisible(false);
+                      setDeveloperPanelVisible(false);
+                      router.replace('/scan' as Href);
+                    }}
+                    style={({ pressed }) => [styles.settingsAction, pressed && styles.pressed]}>
+                    <Ionicons color="#8fffc1" name="scan" size={20} />
+                    <Text style={styles.settingsActionText}>Scan</Text>
+                  </Pressable>
+
+                  <Pressable
+                    disabled={!deviceReady}
+                    onPress={() => void handleDisconnect()}
+                    style={({ pressed }) => [
+                      styles.settingsAction,
+                      !deviceReady && styles.menuButtonDisabled,
+                      pressed && styles.pressed,
+                    ]}>
+                    <Ionicons color="#8fffc1" name="power" size={20} />
+                    <Text style={styles.settingsActionText}>Disconnect</Text>
+                  </Pressable>
+                </View>
+
+                <Text style={styles.devLabel}>Developer command</Text>
+                <View style={styles.commandRow}>
+                  <TextInput
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    editable={!sending}
+                    onChangeText={setCommandDraft}
+                    placeholder="STATUS?"
+                    placeholderTextColor="#6b7280"
+                    style={styles.commandInput}
+                    value={commandDraft}
+                  />
+                  <Pressable
+                    disabled={!commandEnabled}
+                    onPress={() => void handleSendCustomCommand()}
+                    style={({ pressed }) => [
+                      styles.sendButton,
+                      !commandEnabled && styles.sendButtonDisabled,
+                      pressed && styles.pressed,
+                    ]}>
+                    <Ionicons color="#05100b" name="send" size={18} />
+                  </Pressable>
+                </View>
+
+                {lastCommand && <Text style={styles.lastCommand}>Last command: {lastCommand}</Text>}
+              </View>
+            )}
+
+            <Text style={styles.quickFooter}>Firmware v2.4.1 - Up to date</Text>
           </View>
         </View>
       </Modal>
@@ -364,8 +459,8 @@ const styles = StyleSheet.create({
     width: 40,
   },
   commandInput: {
-    backgroundColor: '#171724',
-    borderColor: '#303044',
+    backgroundColor: '#10192a',
+    borderColor: '#2b3852',
     borderRadius: 16,
     borderWidth: 1,
     color: '#ffffff',
@@ -385,12 +480,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   devLabel: {
-    color: '#777288',
+    color: '#7f8799',
     fontSize: 12,
     fontWeight: '900',
     letterSpacing: 1.4,
     marginBottom: 10,
-    marginTop: 24,
+    marginTop: 18,
     textTransform: 'uppercase',
   },
   divider: {
@@ -495,12 +590,142 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
+  quickBallIcon: {
+    alignItems: 'center',
+    backgroundColor: '#ed4055',
+    borderRadius: 18,
+    height: 36,
+    justifyContent: 'center',
+    overflow: 'hidden',
+    width: 36,
+  },
+  quickBallLine: {
+    backgroundColor: 'rgba(255, 255, 255, 0.28)',
+    height: 1,
+    transform: [{ rotate: '6deg' }],
+    width: 42,
+  },
+  quickControlChevron: {
+    position: 'absolute',
+    right: 14,
+    top: 24,
+  },
+  quickControlIcon: {
+    alignItems: 'center',
+    borderRadius: 21,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
+  },
+  quickControlsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  quickControlsHeader: {
+    marginBottom: 12,
+  },
+  quickControlSubtitle: {
+    color: '#9aa4b6',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  quickControlTextBlock: {
+    bottom: 14,
+    left: 14,
+    position: 'absolute',
+  },
+  quickControlTile: {
+    backgroundColor: '#1c273a',
+    borderRadius: 18,
+    height: 108,
+    padding: 14,
+    width: '47.5%',
+  },
+  quickControlTitle: {
+    color: '#f7f8fb',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  quickDeviceCard: {
+    alignItems: 'center',
+    backgroundColor: '#151d30',
+    borderRadius: 18,
+    flexDirection: 'row',
+    marginBottom: 20,
+    minHeight: 64,
+    paddingHorizontal: 14,
+  },
+  quickDeviceDot: {
+    backgroundColor: '#30cf60',
+    borderRadius: 6,
+    height: 12,
+    width: 12,
+  },
+  quickDeviceDotOffline: {
+    backgroundColor: '#e6a640',
+  },
+  quickDeviceSubtitle: {
+    color: '#9aa4b6',
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  quickDeviceTextBlock: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  quickDeviceTitle: {
+    color: '#f7f8fb',
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  quickFooter: {
+    color: '#8c95a8',
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 28,
+    textAlign: 'center',
+  },
   quickSheet: {
-    backgroundColor: '#10101a',
-    borderTopLeftRadius: 34,
-    borderTopRightRadius: 34,
-    padding: 22,
-    paddingBottom: 34,
+    backgroundColor: '#111827',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 18,
+    paddingTop: 8,
+    paddingBottom: 20,
+  },
+  quickSleepRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 30,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  quickSleepText: {
+    color: '#f7f8fb',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  quickSwitchThumb: {
+    backgroundColor: '#f5f8ff',
+    borderRadius: 999,
+    height: 22,
+    width: 22,
+  },
+  quickSwitchThumbActive: {
+    transform: [{ translateX: 24 }],
+  },
+  quickSwitchTrack: {
+    backgroundColor: '#253149',
+    borderRadius: 999,
+    padding: 3,
+    width: 52,
+  },
+  quickSwitchTrackActive: {
+    backgroundColor: '#2fcb6a',
   },
   scanButton: {
     alignItems: 'center',
@@ -531,6 +756,45 @@ const styles = StyleSheet.create({
   sendButtonDisabled: {
     opacity: 0.45,
   },
+  settingsAction: {
+    alignItems: 'center',
+    backgroundColor: '#172238',
+    borderColor: '#2a3650',
+    borderRadius: 18,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    paddingVertical: 14,
+  },
+  settingsActionText: {
+    color: '#ececff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  settingsActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  settingsPanel: {
+    backgroundColor: 'rgba(15, 24, 40, 0.78)',
+    borderColor: '#24314a',
+    borderRadius: 20,
+    borderWidth: 1,
+    marginTop: 18,
+    padding: 14,
+  },
+  sheetTopButton: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: '#22304a',
+    borderRadius: 18,
+    height: 36,
+    justifyContent: 'center',
+    marginBottom: 8,
+    width: 36,
+  },
   sheetHandle: {
     alignSelf: 'center',
     backgroundColor: '#35354a',
@@ -546,15 +810,16 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   sheetSubtitle: {
-    color: '#777288',
-    fontSize: 13,
-    fontWeight: '700',
+    color: '#9aa4b6',
+    fontSize: 15,
+    fontWeight: '600',
     marginTop: 4,
   },
   sheetTitle: {
-    color: '#ffffff',
-    fontSize: 24,
+    color: '#f7f8fb',
+    fontSize: 30,
     fontWeight: '900',
+    letterSpacing: -0.6,
   },
   sleepCard: {
     alignItems: 'center',

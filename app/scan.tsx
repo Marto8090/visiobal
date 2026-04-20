@@ -22,11 +22,13 @@ import { BallDevice } from '@/src/types/bluetooth';
 
 export default function ScanScreen() {
   const router = useRouter();
-  const { connectToBall, connectedDevice, isConnected } = useBluetoothSession();
+  const { connectToBall, disconnectFromBall, connectedDevice, isConnected } =
+    useBluetoothSession();
 
   const [devices, setDevices] = useState<BallDevice[]>([]);
   const [loading, setLoading] = useState(true);
   const [connectingId, setConnectingId] = useState<string | null>(null);
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [connectedDeviceId, setConnectedDeviceId] = useState<string | null>(
     isConnected ? connectedDevice?.id ?? null : null
   );
@@ -62,7 +64,10 @@ export default function ScanScreen() {
   useEffect(() => {
     if (isConnected && connectedDevice) {
       setConnectedDeviceId(connectedDevice.id);
+      return;
     }
+
+    setConnectedDeviceId(null);
   }, [connectedDevice, isConnected]);
 
   const handleConnect = async (device: BallDevice) => {
@@ -87,6 +92,21 @@ export default function ScanScreen() {
     }
   };
 
+  const handleDisconnect = async (device: BallDevice) => {
+    try {
+      setDisconnectingId(device.id);
+      await disconnectFromBall();
+      setConnectedDeviceId(null);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Something went wrong while disconnecting.';
+
+      Alert.alert('Disconnect failed', message);
+    } finally {
+      setDisconnectingId(null);
+    }
+  };
+
   const handleContinue = () => {
     if (!connectedDeviceId) {
       return;
@@ -98,8 +118,17 @@ export default function ScanScreen() {
   const renderDevice = ({ item }: { item: BallDevice }) => {
     const isRowConnected = connectedDeviceId === item.id;
     const isConnecting = connectingId === item.id;
-    const isDisabled = connectingId !== null || isRowConnected;
+    const isDisconnecting = disconnectingId === item.id;
+    const isBusy = connectingId !== null || disconnectingId !== null;
+    const isDisabled = isBusy && !isConnecting && !isDisconnecting;
     const deviceName = item.name?.trim() || TARGET_BLE_DEVICE_NAME;
+    const buttonLabel = isDisconnecting
+      ? 'Disconnecting...'
+      : isRowConnected
+        ? 'Disconnect'
+        : isConnecting
+          ? 'Connecting...'
+          : 'Connect';
 
     return (
       <View style={styles.deviceRow}>
@@ -117,14 +146,23 @@ export default function ScanScreen() {
           style={({ pressed }) => [
             styles.connectButton,
             isRowConnected && styles.connectedButton,
-            isDisabled && !isRowConnected && styles.connectButtonDisabled,
+            (isDisabled || isConnecting || isDisconnecting) &&
+              !isRowConnected &&
+              styles.connectButtonDisabled,
             pressed && !isDisabled && styles.buttonPressed,
           ]}
-          onPress={() => void handleConnect(item)}
-          disabled={isDisabled}
+          onPress={() => {
+            if (isRowConnected) {
+              void handleDisconnect(item);
+              return;
+            }
+
+            void handleConnect(item);
+          }}
+          disabled={isDisabled || isConnecting || isDisconnecting}
         >
           <Text style={[styles.connectButtonText, isRowConnected && styles.connectedButtonText]}>
-            {isRowConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Connect'}
+            {buttonLabel}
           </Text>
         </Pressable>
       </View>
@@ -335,7 +373,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   connectButton: {
-    minWidth: 82,
+    minWidth: 108,
     height: 40,
     borderRadius: 10,
     alignItems: 'center',
