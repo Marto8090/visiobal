@@ -1,83 +1,114 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, FlatList } from 'react-native';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useState } from 'react';
+import {
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 const TRACKS = [
-  { id: '1', title: 'Lora - Deep Focus' },
-  { id: '2', title: 'Calm River Flow' },
-  { id: '3', title: 'Zen State' },
-  { id: '4', title: 'Ocean Waves' },
-  { id: '5', title: 'Ambient Pulse' },
+  { id: '1', title: 'Lora - Deep Focus', duration: '4:05', genre: 'Ambient' },
+  { id: '2', title: 'Calm River Flow', duration: '3:42', genre: 'Nature' },
+  { id: '3', title: 'Zen State', duration: '5:18', genre: 'Meditation' },
+  { id: '4', title: 'Ocean Waves', duration: '6:01', genre: 'Nature' },
+  { id: '5', title: 'Ambient Pulse', duration: '4:33', genre: 'Electronic' },
 ];
 
 export default function SoundPage() {
   const router = useRouter();
-  const [selectedTrack, setSelectedTrack] = useState(TRACKS[0].id);
+  const [selectedId, setSelectedId] = useState(TRACKS[0].id);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  const currentTrack = TRACKS.find(t => t.id === selectedId)!;
 
   return (
     <View style={styles.container}>
+
+      {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#1E3A8A" />
+        <Pressable style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={20} color="#F1F5FF" />
         </Pressable>
         <Text style={styles.headerTitle}>SOUND LIBRARY</Text>
-        <View style={{ width: 44 }} />
+        <View style={{ width: 40 }} />
       </View>
 
-      {/* Main Player Card */}
+      {/* Player card */}
       <View style={styles.playerCard}>
-        <View style={styles.artPlaceholder}>
-          <Ionicons name="musical-notes" size={50} color="#3B82F6" />
+
+        {/* Art */}
+        <View style={styles.artWrap}>
+          <View style={styles.artInner}>
+            <Ionicons name="musical-notes" size={40} color="#DC2626" />
+          </View>
+          <View style={styles.artGlow} />
         </View>
-        <Text style={styles.nowPlayingTitle}>
-          {TRACKS.find(t => t.id === selectedTrack)?.title}
-        </Text>
-        <Text style={styles.nowPlayingSub}>Visioball Audio Sync</Text>
-        
-        {/* Progress Bar */}
-        <View style={styles.progressContainer}>
-          <View style={styles.progressBar}>
+
+        <Text style={styles.trackTitle}>{currentTrack.title}</Text>
+        <Text style={styles.trackMeta}>{currentTrack.genre} · {currentTrack.duration}</Text>
+
+        {/* Progress */}
+        <View style={styles.progressWrap}>
+          <View style={styles.progressTrack}>
             <View style={styles.progressFill} />
+            <View style={styles.progressKnob} />
           </View>
           <View style={styles.timeRow}>
             <Text style={styles.timeText}>1:24</Text>
-            <Text style={styles.timeText}>4:05</Text>
+            <Text style={styles.timeText}>{currentTrack.duration}</Text>
           </View>
         </View>
 
-        {/* Media Controls */}
+        {/* Controls */}
         <View style={styles.controls}>
-          <Pressable><Ionicons name="play-skip-back" size={32} color="#64748B" /></Pressable>
-          <Pressable 
-            style={({pressed}) => [styles.playBtn, pressed && {transform: [{scale: 0.9}]}]} 
-            onPress={() => setIsPlaying(!isPlaying)}
-          >
-            <Ionicons name={isPlaying ? "pause" : "play"} size={36} color="#fff" style={{marginLeft: isPlaying ? 0 : 4}}/>
+          <Pressable style={({ pressed }) => [styles.ctrlBtn, pressed && styles.pressed]}>
+            <Ionicons name="play-skip-back" size={22} color="#8892A8" />
           </Pressable>
-          <Pressable><Ionicons name="play-skip-forward" size={32} color="#64748B" /></Pressable>
+          <Pressable
+            onPress={() => setIsPlaying(v => !v)}
+            style={({ pressed }) => [styles.playBtn, pressed && styles.pressed]}
+          >
+            <Ionicons
+              name={isPlaying ? 'pause' : 'play'}
+              size={30}
+              color="#080B14"
+              style={!isPlaying && { marginLeft: 3 }}
+            />
+          </Pressable>
+          <Pressable style={({ pressed }) => [styles.ctrlBtn, pressed && styles.pressed]}>
+            <Ionicons name="play-skip-forward" size={22} color="#8892A8" />
+          </Pressable>
         </View>
       </View>
 
-      {/* Clean Track List */}
+      {/* Track list */}
+      <Text style={styles.listLabel}>ALL TRACKS</Text>
       <FlatList
         data={TRACKS}
-        keyExtractor={(item) => item.id}
+        keyExtractor={item => item.id}
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => {
-          const isActive = selectedTrack === item.id;
+        renderItem={({ item, index }) => {
+          const active = item.id === selectedId;
           return (
-            <Pressable 
-              style={[styles.trackItem, isActive && styles.trackItemActive]}
-              onPress={() => { setSelectedTrack(item.id); setIsPlaying(true); }}
+            <Pressable
+              onPress={() => { setSelectedId(item.id); setIsPlaying(true); }}
+              style={({ pressed }) => [styles.trackRow, active && styles.trackRowActive, pressed && styles.pressed]}
             >
-              <View style={styles.trackInfo}>
-                <View style={[styles.trackNumber, isActive && styles.trackNumberActive]}>
-                  <Ionicons name={isActive ? "volume-high" : "musical-note"} size={16} color={isActive ? "#fff" : "#64748B"} />
-                </View>
-                <Text style={[styles.trackText, isActive && styles.trackTextActive]}>{item.title}</Text>
+              <View style={[styles.trackNum, active && styles.trackNumActive]}>
+                {active
+                  ? <Ionicons name="volume-high" size={14} color="#DC2626" />
+                  : <Text style={styles.trackNumText}>{index + 1}</Text>
+                }
               </View>
+              <View style={styles.trackInfo}>
+                <Text style={[styles.trackName, active && styles.trackNameActive]} numberOfLines={1}>{item.title}</Text>
+                <Text style={styles.trackGenre}>{item.genre}</Text>
+              </View>
+              <Text style={styles.trackDuration}>{item.duration}</Text>
             </Pressable>
           );
         }}
@@ -87,31 +118,47 @@ export default function SoundPage() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F8FC' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 60, paddingBottom: 20 },
-  backBtn: { backgroundColor: '#FFFFFF', padding: 10, borderRadius: 20, shadowColor: '#94A3B8', shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
-  headerTitle: { color: '#1E3A8A', fontSize: 16, fontWeight: '800', letterSpacing: 2 },
-  
-  playerCard: { backgroundColor: '#FFFFFF', margin: 24, borderRadius: 32, padding: 24, alignItems: 'center', shadowColor: '#3B82F6', shadowOffset: {width: 0, height: 10}, shadowOpacity: 0.08, shadowRadius: 20, elevation: 10 },
-  artPlaceholder: { width: 100, height: 100, backgroundColor: '#EFF6FF', borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-  nowPlayingTitle: { color: '#0F172A', fontSize: 22, fontWeight: '900', marginBottom: 4 },
-  nowPlayingSub: { color: '#3B82F6', fontSize: 14, fontWeight: '700', marginBottom: 24 },
-  
-  progressContainer: { width: '100%', marginBottom: 24 },
-  progressBar: { width: '100%', height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, marginBottom: 8 },
-  progressFill: { width: '35%', height: '100%', backgroundColor: '#3B82F6', borderRadius: 3 },
+  container: { flex: 1, backgroundColor: '#080B14' },
+
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16 },
+  backBtn: { width: 40, height: 40, backgroundColor: '#0F1220', borderRadius: 13, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { color: '#F1F5FF', fontSize: 13, fontWeight: '800', letterSpacing: 3 },
+
+  playerCard: { backgroundColor: '#0F1220', marginHorizontal: 20, borderRadius: 24, padding: 22, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', marginBottom: 24 },
+
+  artWrap: { width: 80, height: 80, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
+  artInner: { width: 80, height: 80, borderRadius: 20, backgroundColor: '#161A2E', borderWidth: 1, borderColor: 'rgba(220,38,38,0.25)', alignItems: 'center', justifyContent: 'center', zIndex: 2 },
+  artGlow: { position: 'absolute', width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(220,38,38,0.12)' },
+
+  trackTitle: { color: '#F1F5FF', fontSize: 18, fontWeight: '900', marginBottom: 4, textAlign: 'center' },
+  trackMeta: { color: '#4A5268', fontSize: 13, fontWeight: '600', marginBottom: 20 },
+
+  progressWrap: { width: '100%', marginBottom: 22 },
+  progressTrack: { width: '100%', height: 4, backgroundColor: '#161A2E', borderRadius: 2, marginBottom: 8, overflow: 'visible' },
+  progressFill: { width: '35%', height: '100%', backgroundColor: '#DC2626', borderRadius: 2 },
+  progressKnob: { position: 'absolute', left: '35%', top: -4, width: 12, height: 12, borderRadius: 6, backgroundColor: '#DC2626', marginLeft: -6 },
   timeRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  timeText: { color: '#94A3B8', fontSize: 12, fontWeight: '600' },
-  
-  controls: { flexDirection: 'row', alignItems: 'center', width: '80%', justifyContent: 'space-between' },
-  playBtn: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#3B82F6', justifyContent: 'center', alignItems: 'center', shadowColor: '#3B82F6', shadowOffset: {width: 0, height: 8}, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8 },
-  
-  listContent: { paddingHorizontal: 24, paddingBottom: 40 },
-  trackItem: { backgroundColor: '#FFFFFF', padding: 16, borderRadius: 20, marginBottom: 12, shadowColor: '#94A3B8', shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  trackItemActive: { backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' },
-  trackInfo: { flexDirection: 'row', alignItems: 'center' },
-  trackNumber: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
-  trackNumberActive: { backgroundColor: '#3B82F6' },
-  trackText: { color: '#334155', fontSize: 16, fontWeight: '700' },
-  trackTextActive: { color: '#1E3A8A', fontWeight: '900' }
+  timeText: { color: '#4A5268', fontSize: 11, fontWeight: '600' },
+
+  controls: { flexDirection: 'row', alignItems: 'center', gap: 24 },
+  ctrlBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  playBtn: { width: 64, height: 64, borderRadius: 20, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center', shadowColor: '#DC2626', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 14, elevation: 10 },
+
+  listLabel: { color: '#2A3050', fontSize: 10, fontWeight: '800', letterSpacing: 2, paddingHorizontal: 24, marginBottom: 10 },
+  listContent: { paddingHorizontal: 20, paddingBottom: 40 },
+
+  trackRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0F1220', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', gap: 12 },
+  trackRowActive: { borderColor: 'rgba(220,38,38,0.25)', backgroundColor: '#130D0D' },
+
+  trackNum: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#161A2E', alignItems: 'center', justifyContent: 'center' },
+  trackNumActive: { backgroundColor: 'rgba(220,38,38,0.15)' },
+  trackNumText: { color: '#4A5268', fontSize: 12, fontWeight: '700' },
+
+  trackInfo: { flex: 1, gap: 2 },
+  trackName: { color: '#8892A8', fontSize: 14, fontWeight: '700' },
+  trackNameActive: { color: '#F1F5FF' },
+  trackGenre: { color: '#2A3050', fontSize: 11, fontWeight: '600' },
+  trackDuration: { color: '#4A5268', fontSize: 12, fontWeight: '600' },
+
+  pressed: { opacity: 0.75, transform: [{ scale: 0.97 }] },
 });

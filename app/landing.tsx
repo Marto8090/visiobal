@@ -1,11 +1,16 @@
-import React, { useState, Suspense } from 'react';
-import { 
-  View, Text, StyleSheet, Pressable, Dimensions, Modal, ActivityIndicator 
-} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Canvas } from '@react-three/fiber/native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Suspense, useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { BackgroundDust, TexturedVisioball } from '@/src/components/VisioballModel';
 
@@ -14,118 +19,121 @@ const { width, height } = Dimensions.get('window');
 export default function LandingPage() {
   const router = useRouter();
   const [showOptions, setShowOptions] = useState(false);
-  
   const [speed, setSpeed] = useState(12);
-  const [interval, setInterval] = useState(15);
+  const [interval, setIntervalVal] = useState(15);
   const [motorMode, setMotorMode] = useState('Gentle');
   const [lightMode, setLightMode] = useState('Constant');
 
   return (
     <View style={styles.container}>
-      {/* FROSTED PREMIUM GRADIENT BACKGROUND */}
-      <LinearGradient 
-        colors={['#E6F0FA', '#F4F7FC', '#FFFFFF']} 
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFillObject} 
-      />
 
+      {/* Ambient glow */}
+      <View style={styles.ambientGlow} />
+
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>VISIOBALL</Text>
-        <Pressable style={styles.powerBtn}>
-          <Ionicons name="power" size={24} color="#3B82F6" />
+        <View>
+          <Text style={styles.wordmark}>VISIOBALL</Text>
+          <Text style={styles.tagline}>Smart Training Ball</Text>
+        </View>
+        <Pressable style={({ pressed }) => [styles.powerBtn, pressed && styles.pressed]}>
+          <Ionicons name="power" size={22} color="#DC2626" />
         </Pressable>
       </View>
 
+      {/* Full-bleed 3D ball */}
       <View style={styles.canvasWrapper}>
-        <Suspense fallback={<ActivityIndicator size="large" color="#3B82F6" />}>
+        <Suspense fallback={<ActivityIndicator size="large" color="#DC2626" />}>
           <Canvas camera={{ position: [0, 0, 6], fov: 45 }}>
-            <ambientLight intensity={0.6} color="#ffffff" />
-            <directionalLight position={[10, 10, 10]} intensity={2} color="#ffffff" />
-            <directionalLight position={[-10, 5, -5]} intensity={2.5} color="#FFDAB9" />
-            <directionalLight position={[0, -10, 5]} intensity={1.5} color="#3B82F6" />
-            
+            <ambientLight intensity={0.5} color="#ffffff" />
+            <directionalLight position={[8, 8, 8]} intensity={2.4} color="#ffffff" />
+            <directionalLight position={[-8, 4, -4]} intensity={1.8} color="#FF6B6B" />
+            <directionalLight position={[0, -8, 4]} intensity={1.0} color="#FF3333" />
             <BackgroundDust />
             <TexturedVisioball />
           </Canvas>
         </Suspense>
       </View>
 
-      <View style={styles.bottomSection}>
-        <Text style={styles.helperText}>Tap the radar to search for devices</Text>
+      {/* Bottom actions */}
+      <View style={styles.bottom}>
+        <Text style={styles.helperText}>Tap radar to search for devices</Text>
         <View style={styles.actionRow}>
-          <Pressable 
-            style={({pressed}) => [styles.primaryBtn, pressed && styles.btnPressed]}
+          <Pressable
+            style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
             onPress={() => router.push('/radar')}
           >
-            <Ionicons name="scan" size={24} color="#fff" style={{marginRight: 8}}/>
+            <Ionicons name="scan" size={20} color="#fff" />
             <Text style={styles.primaryBtnText}>Radar Scan</Text>
           </Pressable>
-
-          <Pressable 
-            style={({pressed}) => [styles.secondaryBtn, pressed && styles.btnPressed]}
+          <Pressable
+            style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
             onPress={() => setShowOptions(true)}
           >
-            <Ionicons name="options" size={24} color="#3B82F6" />
+            <Ionicons name="options-outline" size={22} color="#DC2626" />
           </Pressable>
         </View>
       </View>
 
-      {/* OPTIONS MODAL */}
-      <Modal visible={showOptions} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Device Settings</Text>
-              <Pressable onPress={() => setShowOptions(false)} style={styles.closeBtn}>
-                <Ionicons name="close" size={24} color="#64748B" />
+      {/* SETTINGS MODAL */}
+      <Modal visible={showOptions} animationType="slide" transparent>
+        <View style={styles.overlay}>
+          <View style={styles.sheet}>
+            <View style={styles.handle} />
+
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Device Settings</Text>
+              <Pressable onPress={() => setShowOptions(false)} style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}>
+                <Ionicons name="close" size={20} color="#8892A8" />
               </Pressable>
             </View>
 
-            <View style={styles.row}>
-              <View style={styles.numberCard}>
-                <Text style={styles.label}>Speed</Text>
-                <View style={styles.stepper}>
-                  <Pressable onPress={() => setSpeed(s => s - 1)}><Ionicons name="remove-circle" size={32} color="#3B82F6"/></Pressable>
-                  <Text style={styles.stepperVal}>{speed}</Text>
-                  <Pressable onPress={() => setSpeed(s => s + 1)}><Ionicons name="add-circle" size={32} color="#3B82F6"/></Pressable>
+            {/* Speed + Interval */}
+            <View style={styles.stepperRow}>
+              {[
+                { label: 'SPEED', val: speed, set: setSpeed },
+                { label: 'INTERVAL', val: interval, set: setIntervalVal },
+              ].map(({ label, val, set }) => (
+                <View key={label} style={styles.stepperCard}>
+                  <Text style={styles.stepperLabel}>{label}</Text>
+                  <View style={styles.stepper}>
+                    <Pressable onPress={() => set(v => Math.max(1, v - 1))} style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}>
+                      <Text style={styles.stepBtnText}>−</Text>
+                    </Pressable>
+                    <Text style={styles.stepVal}>{val}</Text>
+                    <Pressable onPress={() => set(v => Math.min(20, v + 1))} style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}>
+                      <Text style={styles.stepBtnText}>+</Text>
+                    </Pressable>
+                  </View>
                 </View>
-              </View>
-              <View style={styles.numberCard}>
-                <Text style={styles.label}>Interval</Text>
-                <View style={styles.stepper}>
-                  <Pressable onPress={() => setInterval(i => i - 1)}><Ionicons name="remove-circle" size={32} color="#3B82F6"/></Pressable>
-                  <Text style={styles.stepperVal}>{interval}</Text>
-                  <Pressable onPress={() => setInterval(i => i + 1)}><Ionicons name="add-circle" size={32} color="#3B82F6"/></Pressable>
-                </View>
-              </View>
+              ))}
             </View>
 
-            <Text style={styles.label}>Motor Mode</Text>
-            <View style={styles.segmentControl}>
-              {['Gentle', 'Dynamic', 'Random'].map(mode => (
-                <Pressable key={mode} style={[styles.segmentBtn, motorMode === mode && styles.segmentActive]} onPress={() => setMotorMode(mode)}>
-                  <Text style={[styles.segmentText, motorMode === mode && styles.segmentTextActive]}>{mode}</Text>
+            <Text style={styles.segLabel}>MOTOR MODE</Text>
+            <View style={styles.seg}>
+              {['Gentle', 'Dynamic', 'Random'].map(m => (
+                <Pressable key={m} onPress={() => setMotorMode(m)} style={[styles.segOpt, motorMode === m && styles.segOptActive]}>
+                  <Text style={[styles.segText, motorMode === m && styles.segTextActive]}>{m}</Text>
                 </Pressable>
               ))}
             </View>
 
-            <Text style={styles.label}>Light Mode</Text>
-            <View style={styles.segmentControl}>
-              {['Constant', 'Breathing', 'Heartbeat'].map(mode => (
-                <Pressable key={mode} style={[styles.segmentBtn, lightMode === mode && styles.segmentActive]} onPress={() => setLightMode(mode)}>
-                  <Text style={[styles.segmentText, lightMode === mode && styles.segmentTextActive]}>{mode}</Text>
+            <Text style={styles.segLabel}>LIGHT MODE</Text>
+            <View style={styles.seg}>
+              {['Constant', 'Breathing', 'Heartbeat'].map(m => (
+                <Pressable key={m} onPress={() => setLightMode(m)} style={[styles.segOpt, lightMode === m && styles.segOptActive]}>
+                  <Text style={[styles.segText, lightMode === m && styles.segTextActive]}>{m}</Text>
                 </Pressable>
               ))}
             </View>
 
-            <Pressable 
-              style={({pressed}) => [styles.musicButton, pressed && styles.btnPressed]} 
-              onPress={() => { setShowOptions(false); router.push('/sound'); }}>
-              <Ionicons name="musical-notes" size={20} color="#fff" />
-              <Text style={styles.musicBtnText}>Sound & Music Menu</Text>
-              <Ionicons name="chevron-forward" size={20} color="#fff" style={{position: 'absolute', right: 20}} />
+            <Pressable
+              style={({ pressed }) => [styles.musicBtn, pressed && styles.pressed]}
+              onPress={() => { setShowOptions(false); router.push('/sound'); }}
+            >
+              <Ionicons name="musical-notes" size={18} color="#080B14" />
+              <Text style={styles.musicBtnText}>Sound & Music</Text>
+              <Ionicons name="chevron-forward" size={18} color="#080B14" style={styles.musicChevron} />
             </Pressable>
           </View>
         </View>
@@ -135,42 +143,48 @@ export default function LandingPage() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'space-between' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, paddingTop: 60, zIndex: 10 },
-  title: { color: '#1E3A8A', fontSize: 28, fontWeight: '900', letterSpacing: 1 },
-  powerBtn: { backgroundColor: '#FFFFFF', padding: 12, borderRadius: 20, shadowColor: '#94A3B8', shadowOffset: {width: 0, height: 6}, shadowOpacity: 0.15, shadowRadius: 10, elevation: 5 },
-  
-  canvasWrapper: { position: 'absolute', top: 0, left: 0, width: width, height: height * 0.75 },
-  
-  bottomSection: { padding: 24, paddingBottom: 40, alignItems: 'center', zIndex: 10 },
-  helperText: { color: '#475569', fontSize: 14, marginBottom: 20, fontWeight: '700' },
-  actionRow: { flexDirection: 'row', gap: 16, width: '100%' },
-  primaryBtn: { flex: 1, backgroundColor: '#3B82F6', flexDirection: 'row', padding: 20, borderRadius: 24, justifyContent: 'center', alignItems: 'center', shadowColor: '#3B82F6', shadowOffset: {width: 0, height: 8}, shadowOpacity: 0.4, shadowRadius: 16, elevation: 8 },
-  primaryBtnText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-  secondaryBtn: { backgroundColor: '#ffffff', padding: 20, borderRadius: 24, justifyContent: 'center', alignItems: 'center', shadowColor: '#94A3B8', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
-  btnPressed: { opacity: 0.85, transform: [{ scale: 0.96 }] },
+  container: { flex: 1, backgroundColor: '#080B14', justifyContent: 'space-between' },
+  ambientGlow: { position: 'absolute', top: 40, left: width / 2 - 150, width: 300, height: 300, borderRadius: 150, backgroundColor: 'rgba(220,38,38,0.07)' },
 
-  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15, 23, 42, 0.3)' },
-  modalContent: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 36, borderTopRightRadius: 36, padding: 24, paddingBottom: 50, shadowColor: '#000', shadowOffset: {width: 0, height: -10}, shadowOpacity: 0.1, shadowRadius: 20, elevation: 20 },
-  modalHandle: { width: 44, height: 5, backgroundColor: '#E2E8F0', borderRadius: 3, alignSelf: 'center', marginBottom: 24 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  modalTitle: { color: '#0F172A', fontSize: 24, fontWeight: '900' },
-  closeBtn: { backgroundColor: '#F8FAFC', padding: 8, borderRadius: 16 },
-  
-  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
-  numberCard: { backgroundColor: '#F8FAFC', padding: 16, borderRadius: 20, width: '48%', borderWidth: 1, borderColor: '#F1F5F9' },
-  label: { color: '#64748B', marginBottom: 12, fontWeight: '800', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
-  stepper: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  stepperVal: { color: '#1E3A8A', fontSize: 26, fontWeight: '900' },
-  
-  segmentControl: { flexDirection: 'row', backgroundColor: '#F8FAFC', borderRadius: 16, padding: 6, marginBottom: 24, borderWidth: 1, borderColor: '#F1F5F9' },
-  segmentBtn: { flex: 1, paddingVertical: 14, alignItems: 'center', borderRadius: 12 },
-  segmentActive: { backgroundColor: '#FFFFFF', shadowColor: '#94A3B8', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.12, shadowRadius: 8, elevation: 3 },
-  segmentText: { color: '#64748B', fontWeight: '800', fontSize: 13 },
-  segmentTextActive: { color: '#3B82F6' },
-  
-  musicButton: { backgroundColor: '#3B82F6', flexDirection: 'row', padding: 22, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginTop: 10, shadowColor: '#3B82F6', shadowOffset: {width: 0, height: 6}, shadowOpacity: 0.3, shadowRadius: 12 },
-  
-  // ADD THIS LINE RIGHT HERE:
-  musicBtnText: { color: '#ffffff', fontSize: 16, fontWeight: 'bold', marginLeft: 10 }
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 24, paddingTop: 58, zIndex: 10 },
+  wordmark: { color: '#F1F5FF', fontSize: 22, fontWeight: '900', letterSpacing: 5 },
+  tagline: { color: '#4A5268', fontSize: 11, fontWeight: '600', letterSpacing: 1, marginTop: 3 },
+  powerBtn: { width: 44, height: 44, backgroundColor: '#0F1220', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', alignItems: 'center', justifyContent: 'center' },
+
+  canvasWrapper: { position: 'absolute', top: 0, left: 0, width, height: height * 0.72 },
+
+  bottom: { paddingHorizontal: 20, paddingBottom: 40, zIndex: 10, gap: 14 },
+  helperText: { color: '#4A5268', fontSize: 13, fontWeight: '600', textAlign: 'center', letterSpacing: 0.3 },
+  actionRow: { flexDirection: 'row', gap: 12 },
+  primaryBtn: { flex: 1, backgroundColor: '#DC2626', flexDirection: 'row', paddingVertical: 18, borderRadius: 22, justifyContent: 'center', alignItems: 'center', gap: 10, shadowColor: '#DC2626', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 16, elevation: 8 },
+  primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  secondaryBtn: { width: 60, backgroundColor: '#0F1220', borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.65)' },
+  sheet: { backgroundColor: '#0F1220', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, paddingBottom: 48, borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.07)' },
+  handle: { width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 2, alignSelf: 'center', marginBottom: 22 },
+  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 },
+  sheetTitle: { color: '#F1F5FF', fontSize: 22, fontWeight: '900' },
+  closeBtn: { width: 34, height: 34, backgroundColor: '#161A2E', borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+
+  stepperRow: { flexDirection: 'row', gap: 12, marginBottom: 22 },
+  stepperCard: { flex: 1, backgroundColor: '#161A2E', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  stepperLabel: { color: '#4A5268', fontSize: 10, fontWeight: '800', letterSpacing: 2, marginBottom: 10 },
+  stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  stepBtn: { width: 32, height: 32, backgroundColor: '#0F1220', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', alignItems: 'center', justifyContent: 'center' },
+  stepBtnText: { color: '#DC2626', fontSize: 20, fontWeight: '300', lineHeight: 22 },
+  stepVal: { color: '#F1F5FF', fontSize: 26, fontWeight: '900' },
+
+  segLabel: { color: '#4A5268', fontSize: 10, fontWeight: '800', letterSpacing: 2, marginBottom: 8 },
+  seg: { flexDirection: 'row', backgroundColor: '#161A2E', borderRadius: 14, padding: 4, gap: 3, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  segOpt: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 11 },
+  segOptActive: { backgroundColor: 'rgba(220,38,38,0.18)', borderWidth: 1, borderColor: 'rgba(220,38,38,0.3)' },
+  segText: { color: '#4A5268', fontSize: 13, fontWeight: '700' },
+  segTextActive: { color: '#F87171' },
+
+  musicBtn: { backgroundColor: '#DC2626', flexDirection: 'row', paddingVertical: 18, borderRadius: 18, alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 4, shadowColor: '#DC2626', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12 },
+  musicBtnText: { color: '#080B14', fontSize: 15, fontWeight: '800' },
+  musicChevron: { position: 'absolute', right: 18 },
+
+  pressed: { opacity: 0.75, transform: [{ scale: 0.97 }] },
 });

@@ -254,6 +254,19 @@ export default function ScanScreen() {
               Continue
             </Text>
           </Pressable>
+
+          {/* SKIP CONNECTION BUTTON */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.skipButton,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={() => router.replace('/control')}
+          >
+            <Text style={styles.skipButtonText}>
+              Skip Connection
+            </Text>
+          </Pressable>
         </View>
       </View>
     </SafeAreaView>
@@ -453,6 +466,21 @@ const styles = StyleSheet.create({
   },
   continueButtonTextDisabled: {
     color: COLORS.muted,
+  },
+  skipButton: {
+    height: 54,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+  },
+  skipButtonText: {
+    color: COLORS.muted,
+    fontSize: 15,
+    fontWeight: '700',
   },
   buttonPressed: {
     opacity: 0.85,
