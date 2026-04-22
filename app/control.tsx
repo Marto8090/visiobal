@@ -9,9 +9,9 @@ import {
   Animated,
   Dimensions,
   Easing,
-  Modal,
   PanResponder,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -22,7 +22,14 @@ import { FrequencySlider } from '@/src/components/FrequencySlider';
 import { TexturedVisioball } from '@/src/components/VisioballModel';
 import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
+
+// How much of the sheet peeks above the bottom when collapsed
+const PEEK_HEIGHT = 80;
+// Full sheet height
+const SHEET_HEIGHT = height * 0.72;
+// How far the sheet travels (hidden position = fully off screen below peek)
+const CLOSED_Y = SHEET_HEIGHT - PEEK_HEIGHT;
 
 function clamp(v: number, lo: number, hi: number) { return Math.min(Math.max(v, lo), hi); }
 
@@ -49,40 +56,78 @@ export default function ControlScreen() {
   const [commandDraft, setCommandDraft] = useState('STATUS?');
   const [devPanelVisible, setDevPanelVisible] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [quickMenuVisible, setQuickMenuVisible] = useState(false);
   const [sending, setSending] = useState(false);
   const [sleepMode, setSleepMode] = useState(false);
   const [volume, setVolume] = useState(57);
   const [lastCmd, setLastCmd] = useState<string | null>(null);
   const [ballRot, setBallRot] = useState({ x: 0, y: 0 });
+  const [sheetOpen, setSheetOpen] = useState(false);
+
   const ballRotRef = useRef(ballRot);
   const panStartRef = useRef(ballRot);
 
-  // Stacked chevrons bounce up then snap back with bounce easing — hints tap/swipe up
+  // Sheet slide animation
+  const sheetY = useRef(new Animated.Value(CLOSED_Y)).current;
+
+  const openSheet = () => {
+    setSheetOpen(true);
+    Animated.spring(sheetY, {
+      toValue: 0,
+      useNativeDriver: true,
+      bounciness: 4,
+      speed: 14,
+    }).start();
+  };
+
+  const closeSheet = () => {
+    Animated.spring(sheetY, {
+      toValue: CLOSED_Y,
+      useNativeDriver: true,
+      bounciness: 2,
+      speed: 16,
+    }).start(() => setSheetOpen(false));
+  };
+
+  // Bounce animation on the peek handle chevrons (only when sheet is closed)
   const bounceAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(bounceAnim, {
-          toValue: -10,
-          duration: 460,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(bounceAnim, {
-          toValue: 0,
-          duration: 380,
-          easing: Easing.out(Easing.bounce),
-          useNativeDriver: true,
-        }),
-        Animated.delay(1800),
+        Animated.timing(bounceAnim, { toValue: -7, duration: 420, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(bounceAnim, { toValue: 0, duration: 340, easing: Easing.out(Easing.bounce), useNativeDriver: true }),
+        Animated.delay(2200),
       ])
     );
     loop.start();
     return () => loop.stop();
   }, [bounceAnim]);
 
-  const pan = useRef(PanResponder.create({
+  // Sheet drag gesture
+  const dragStart = useRef(0);
+  const sheetDrag = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6,
+      onPanResponderGrant: () => {
+        dragStart.current = (sheetY as any)._value ?? 0;
+      },
+      onPanResponderMove: (_, g) => {
+        const next = clamp(dragStart.current + g.dy, 0, CLOSED_Y);
+        sheetY.setValue(next);
+      },
+      onPanResponderRelease: (_, g) => {
+        const currentY = (sheetY as any)._value ?? 0;
+        if (g.dy > 40 || currentY > CLOSED_Y * 0.5) {
+          closeSheet();
+        } else {
+          openSheet();
+        }
+      },
+    })
+  ).current;
+
+  // Ball rotation gesture
+  const ballPan = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 4 || Math.abs(g.dy) > 4,
     onPanResponderGrant: () => { panStartRef.current = ballRotRef.current; },
@@ -131,7 +176,9 @@ export default function ControlScreen() {
   };
 
   const handleDisconnect = async () => {
-    setIsPlaying(false); setQuickMenuVisible(false); setDevPanelVisible(false);
+    setIsPlaying(false);
+    closeSheet();
+    setDevPanelVisible(false);
     router.replace('/scan' as Href);
     try { await disconnectFromBall(); } catch (e) { Alert.alert('Disconnect failed', e instanceof Error ? e.message : 'Error.'); }
   };
@@ -143,7 +190,7 @@ export default function ControlScreen() {
 
       {/* 3D Ball */}
       <View style={styles.ballStage}>
-        <View {...pan.panHandlers} style={styles.canvasWrap}>
+        <View {...ballPan.panHandlers} style={styles.canvasWrap}>
           <Suspense fallback={<ActivityIndicator color="#DC2626" size="large" />}>
             <Canvas camera={{ fov: 44, position: [0, 0, 6] }}>
               <ambientLight color="#ffffff" intensity={0.5} />
@@ -155,10 +202,9 @@ export default function ControlScreen() {
         </View>
       </View>
 
-      {/* Main content */}
+      {/* Main content — sits behind sheet */}
       <View style={styles.content}>
 
-        {/* Status */}
         <View style={styles.statusRow}>
           <View style={[styles.statusChip, !deviceReady && styles.statusChipOff]}>
             <View style={[styles.statusDot, !deviceReady && styles.statusDotOff]} />
@@ -169,14 +215,12 @@ export default function ControlScreen() {
           <Text style={styles.metaText}>{deviceReady ? '79% · BT 5.2' : 'Tap to scan'}</Text>
         </View>
 
-        {/* Volume */}
         <View style={styles.volHeader}>
           <Text style={styles.sectionLabel}>VOLUME</Text>
           <Text style={styles.volVal}>{volume}%</Text>
         </View>
         <FrequencySlider minimumValue={0} maximumValue={100} step={1} value={volume} onValueChange={setVolume} />
 
-        {/* Transport */}
         <View style={styles.transport}>
           <Pressable style={({ pressed }) => [styles.arrowBtn, pressed && styles.pressed]}>
             <Ionicons name="arrow-back" size={24} color="#F1F5FF" />
@@ -198,7 +242,6 @@ export default function ControlScreen() {
 
         <View style={styles.divider} />
 
-        {/* Sleep */}
         <Pressable onPress={() => setSleepMode(v => !v)} style={({ pressed }) => [styles.sleepRow, pressed && styles.pressed]}>
           <View>
             <Text style={styles.sleepTitle}>Sleep mode</Text>
@@ -215,106 +258,114 @@ export default function ControlScreen() {
             <Text style={styles.scanBtnText}>Scan for Ball</Text>
           </Pressable>
         )}
-
-        {/* Quick menu card — three stacked chevrons bounce up to hint interaction */}
-        <Pressable onPress={() => setQuickMenuVisible(true)} style={({ pressed }) => [styles.quickCard, pressed && styles.pressed]}>
-          <Animated.View style={[styles.chevronsWrap, { transform: [{ translateY: bounceAnim }] }]}>
-            <Ionicons name="chevron-up" size={15} color="rgba(220,38,38,0.28)" style={styles.chevronBot} />
-            <Ionicons name="chevron-up" size={15} color="rgba(220,38,38,0.58)" style={styles.chevronMid} />
-            <Ionicons name="chevron-up" size={15} color="#DC2626" />
-          </Animated.View>
-          <Text style={styles.quickCardText}>Open quick menu</Text>
-        </Pressable>
-
       </View>
 
-      {/* QUICK MENU MODAL */}
-      <Modal visible={quickMenuVisible} animationType="slide" transparent onRequestClose={() => setQuickMenuVisible(false)}>
-        <View style={styles.overlay}>
-          <View style={styles.sheet}>
+      {/* Tap-away backdrop when sheet is open */}
+      {sheetOpen && (
+        <Pressable style={styles.backdrop} onPress={closeSheet} />
+      )}
 
-            <Pressable onPress={() => { setQuickMenuVisible(false); setDevPanelVisible(false); }} style={({ pressed }) => [styles.sheetHandle, pressed && styles.pressed]}>
-              <View style={styles.handleBar} />
-            </Pressable>
+      {/* PERSISTENT BOTTOM SHEET */}
+      <Animated.View style={[styles.sheet, { transform: [{ translateY: sheetY }] }]}>
 
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Controls</Text>
-              <Text style={styles.sheetSub}>CricTrack v2 · Device {suffix}</Text>
-            </View>
-
-            {/* Device card */}
-            <Pressable
-              onPress={() => { if (!deviceReady) { setQuickMenuVisible(false); router.replace('/scan' as Href); } }}
-              style={({ pressed }) => [styles.deviceCard, pressed && styles.pressed]}
-            >
-              <View style={styles.deviceBall}>
-                <View style={styles.deviceBallLine} />
-              </View>
-              <View style={styles.deviceCardText}>
-                <Text style={styles.deviceCardTitle}>VisioBall</Text>
-                <Text style={styles.deviceCardSub}>{deviceReady ? 'Connected · 79% battery' : 'Disconnected · tap to scan'}</Text>
-              </View>
-              <View style={[styles.deviceStatus, !deviceReady && styles.deviceStatusOff]} />
-            </Pressable>
-
-            {/* Tiles */}
-            <View style={styles.tilesGrid}>
-              <Tile color="#22C55E" icon="musical-notes" sub="EQ · bass · mix"
-                title="Audio" onPress={() => { setQuickMenuVisible(false); setDevPanelVisible(false); router.push('/sound' as Href); }} />
-              <Tile color="#F59E0B" icon="locate" sub="Radar · GPS"
-                title="Locate" onPress={() => { setQuickMenuVisible(false); setDevPanelVisible(false); router.push('/radar' as Href); }} />
-              <Tile color="#DC2626" icon="settings" sub="Alerts · device"
-                title="Settings" onPress={() => setDevPanelVisible(v => !v)} />
-            </View>
-
-            {/* Sleep toggle */}
-            <Pressable onPress={() => setSleepMode(v => !v)} style={({ pressed }) => [styles.sheetSleepRow, pressed && styles.pressed]}>
-              <Text style={styles.sheetSleepText}>Sleep mode</Text>
-              <View style={[styles.track, sleepMode && styles.trackOn]}>
-                <View style={[styles.thumb, sleepMode && styles.thumbOn]} />
-              </View>
-            </Pressable>
-
-            {/* Developer panel */}
-            {devPanelVisible && (
-              <View style={styles.devPanel}>
-                <View style={styles.devActions}>
-                  <Pressable onPress={() => { setQuickMenuVisible(false); setDevPanelVisible(false); router.replace('/scan' as Href); }}
-                    style={({ pressed }) => [styles.devBtn, pressed && styles.pressed]}>
-                    <Ionicons name="scan" size={18} color="#22C55E" />
-                    <Text style={styles.devBtnText}>Scan</Text>
-                  </Pressable>
-                  <Pressable disabled={!deviceReady} onPress={() => void handleDisconnect()}
-                    style={({ pressed }) => [styles.devBtn, !deviceReady && styles.devBtnDisabled, pressed && styles.pressed]}>
-                    <Ionicons name="power" size={18} color="#22C55E" />
-                    <Text style={styles.devBtnText}>Disconnect</Text>
-                  </Pressable>
-                </View>
-                <Text style={styles.devLabel}>Developer command</Text>
-                <View style={styles.cmdRow}>
-                  <TextInput
-                    autoCapitalize="characters"
-                    autoCorrect={false}
-                    editable={!sending}
-                    onChangeText={setCommandDraft}
-                    placeholder="STATUS?"
-                    placeholderTextColor="#4A5268"
-                    style={styles.cmdInput}
-                    value={commandDraft}
-                  />
-                  <Pressable disabled={!cmdEnabled} onPress={() => void sendCustom()}
-                    style={({ pressed }) => [styles.sendBtn, !cmdEnabled && styles.sendBtnDisabled, pressed && styles.pressed]}>
-                    <Ionicons name="send" size={16} color="#080B14" />
-                  </Pressable>
-                </View>
-                {lastCmd && <Text style={styles.lastCmd}>Last: {lastCmd}</Text>}
-              </View>
-            )}
-
-            <Text style={styles.footer}>Firmware v2.4.1 · Up to date</Text>
-          </View>
+        {/* Draggable peek handle */}
+        <View {...sheetDrag.panHandlers} style={styles.peekHandle}>
+          <Animated.View style={[styles.chevronsWrap, { transform: [{ translateY: sheetOpen ? 0 : bounceAnim }] }]}>
+            <Ionicons name="chevron-up" size={14} color="rgba(220,38,38,0.28)" style={styles.chevronBot} />
+            <Ionicons name="chevron-up" size={14} color="rgba(220,38,38,0.6)" style={styles.chevronMid} />
+            <Ionicons name="chevron-up" size={14} color="#DC2626" />
+          </Animated.View>
+          <Pressable onPress={sheetOpen ? closeSheet : openSheet} style={styles.peekTapArea}>
+            <View style={styles.handleBar} />
+            <Text style={styles.peekLabel}>Quick menu</Text>
+          </Pressable>
         </View>
-      </Modal>
+
+        {/* Sheet content */}
+        <ScrollView
+          style={styles.sheetScroll}
+          contentContainerStyle={styles.sheetContent}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={sheetOpen}
+        >
+          <View style={styles.sheetHeader}>
+            <Text style={styles.sheetTitle}>Controls</Text>
+            <Text style={styles.sheetSub}>CricTrack v2 · Device {suffix}</Text>
+          </View>
+
+          {/* Device card */}
+          <Pressable
+            onPress={() => { if (!deviceReady) { closeSheet(); router.replace('/scan' as Href); } }}
+            style={({ pressed }) => [styles.deviceCard, pressed && styles.pressed]}
+          >
+            <View style={styles.deviceBall}>
+              <View style={styles.deviceBallLine} />
+            </View>
+            <View style={styles.deviceCardText}>
+              <Text style={styles.deviceCardTitle}>VisioBall</Text>
+              <Text style={styles.deviceCardSub}>{deviceReady ? 'Connected · 79% battery' : 'Disconnected · tap to scan'}</Text>
+            </View>
+            <View style={[styles.deviceStatus, !deviceReady && styles.deviceStatusOff]} />
+          </Pressable>
+
+          {/* Tiles */}
+          <View style={styles.tilesGrid}>
+            <Tile color="#22C55E" icon="musical-notes" sub="EQ · bass · mix"
+              title="Audio" onPress={() => { closeSheet(); router.push('/sound' as Href); }} />
+            <Tile color="#F59E0B" icon="locate" sub="Radar · GPS"
+              title="Locate" onPress={() => { closeSheet(); router.push('/radar' as Href); }} />
+            <Tile color="#DC2626" icon="settings" sub="Alerts · device"
+              title="Settings" onPress={() => setDevPanelVisible(v => !v)} />
+          </View>
+
+          {/* Sleep toggle */}
+          <Pressable onPress={() => setSleepMode(v => !v)} style={({ pressed }) => [styles.sheetSleepRow, pressed && styles.pressed]}>
+            <Text style={styles.sheetSleepText}>Sleep mode</Text>
+            <View style={[styles.track, sleepMode && styles.trackOn]}>
+              <View style={[styles.thumb, sleepMode && styles.thumbOn]} />
+            </View>
+          </Pressable>
+
+          {/* Developer panel */}
+          {devPanelVisible && (
+            <View style={styles.devPanel}>
+              <View style={styles.devActions}>
+                <Pressable onPress={() => { closeSheet(); setDevPanelVisible(false); router.replace('/scan' as Href); }}
+                  style={({ pressed }) => [styles.devBtn, pressed && styles.pressed]}>
+                  <Ionicons name="scan" size={18} color="#22C55E" />
+                  <Text style={styles.devBtnText}>Scan</Text>
+                </Pressable>
+                <Pressable disabled={!deviceReady} onPress={() => void handleDisconnect()}
+                  style={({ pressed }) => [styles.devBtn, !deviceReady && styles.devBtnDisabled, pressed && styles.pressed]}>
+                  <Ionicons name="power" size={18} color="#22C55E" />
+                  <Text style={styles.devBtnText}>Disconnect</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.devLabel}>Developer command</Text>
+              <View style={styles.cmdRow}>
+                <TextInput
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  editable={!sending}
+                  onChangeText={setCommandDraft}
+                  placeholder="STATUS?"
+                  placeholderTextColor="#4A5268"
+                  style={styles.cmdInput}
+                  value={commandDraft}
+                />
+                <Pressable disabled={!cmdEnabled} onPress={() => void sendCustom()}
+                  style={({ pressed }) => [styles.sendBtn, !cmdEnabled && styles.sendBtnDisabled, pressed && styles.pressed]}>
+                  <Ionicons name="send" size={16} color="#080B14" />
+                </Pressable>
+              </View>
+              {lastCmd && <Text style={styles.lastCmd}>Last: {lastCmd}</Text>}
+            </View>
+          )}
+
+          <Text style={styles.footer}>Firmware v2.4.1 · Up to date</Text>
+        </ScrollView>
+      </Animated.View>
+
     </View>
   );
 }
@@ -323,12 +374,12 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#080B14' },
   topGlow: { position: 'absolute', top: 30, left: '50%', marginLeft: -140, width: 280, height: 280, borderRadius: 140, backgroundColor: 'rgba(220,38,38,0.07)' },
 
-  ballStage: { height: 340, alignItems: 'center', justifyContent: 'center' },
-  canvasWrap: { width: Math.min(width, 390), height: 300 },
+  ballStage: { height: 300, alignItems: 'center', justifyContent: 'center' },
+  canvasWrap: { width: Math.min(width, 390), height: 280 },
 
-  content: { flex: 1, paddingHorizontal: 20, paddingBottom: 20 },
+  content: { flex: 1, paddingHorizontal: 20, paddingBottom: PEEK_HEIGHT + 8 },
 
-  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
   statusChip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(34,197,94,0.08)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(34,197,94,0.25)', paddingHorizontal: 12, paddingVertical: 7 },
   statusChipOff: { backgroundColor: 'rgba(255,193,68,0.08)', borderColor: 'rgba(255,193,68,0.25)' },
   statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#22C55E' },
@@ -341,13 +392,13 @@ const styles = StyleSheet.create({
   volHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   volVal: { color: '#8892A8', fontSize: 12, fontWeight: '700' },
 
-  transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginTop: 24 },
+  transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginTop: 22, marginBottom: 0 },
   arrowBtn: { width: 52, height: 52, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', alignItems: 'center', justifyContent: 'center' },
   playBtn: { width: 68, height: 68, borderRadius: 22, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center', shadowColor: '#DC2626', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 10 },
   playBtnOff: { backgroundColor: '#1C2238', shadowOpacity: 0 },
   playIconNudge: { marginLeft: 3 },
 
-  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginVertical: 22 },
+  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginVertical: 20 },
 
   sleepRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 16, paddingVertical: 14 },
   sleepTitle: { color: '#8892A8', fontSize: 15, fontWeight: '700' },
@@ -361,23 +412,54 @@ const styles = StyleSheet.create({
   scanBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#22C55E', borderRadius: 14, paddingVertical: 14, marginTop: 16 },
   scanBtnText: { color: '#080B14', fontSize: 15, fontWeight: '800' },
 
-  // Quick menu card
-  quickCard: { alignItems: 'center', backgroundColor: '#0F1220', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', marginTop: 16, paddingVertical: 16, gap: 8 },
-  chevronsWrap: { flexDirection: 'column', alignItems: 'center', gap: -4 },
-  chevronBot: { marginBottom: -8 },
-  chevronMid: { marginBottom: -8 },
-  quickCardText: { color: '#4A5268', fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+  // Backdrop
+  backdrop: { position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.45)', zIndex: 10 },
 
-  // Modal
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
-  sheet: { backgroundColor: '#0F1220', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 18, paddingBottom: 36, borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.07)' },
-  sheetHandle: { alignItems: 'center', paddingVertical: 14 },
+  // Bottom sheet
+  sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: SHEET_HEIGHT,
+    backgroundColor: '#0F1220',
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    borderTopWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    zIndex: 20,
+    // Shadow upward
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 24,
+  },
+
+  // Peek handle — always visible, draggable
+  peekHandle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 10,
+    gap: 12,
+  },
+  chevronsWrap: { alignItems: 'center' },
+  chevronBot: { marginBottom: -7 },
+  chevronMid: { marginBottom: -7 },
+  peekTapArea: { flex: 1, alignItems: 'center', gap: 6 },
   handleBar: { width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)' },
-  sheetHeader: { marginBottom: 16 },
-  sheetTitle: { color: '#F1F5FF', fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },
+  peekLabel: { color: '#4A5268', fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+
+  // Sheet inner content
+  sheetScroll: { flex: 1 },
+  sheetContent: { paddingHorizontal: 18, paddingBottom: 40 },
+  sheetHeader: { marginBottom: 16, marginTop: 4 },
+  sheetTitle: { color: '#F1F5FF', fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
   sheetSub: { color: '#4A5268', fontSize: 13, fontWeight: '500', marginTop: 4 },
 
-  deviceCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#161A2E', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  deviceCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#161A2E', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
   deviceBall: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   deviceBallLine: { width: 42, height: 1, backgroundColor: 'rgba(255,255,255,0.3)', transform: [{ rotate: '6deg' }] },
   deviceCardText: { flex: 1, marginLeft: 12 },
@@ -386,7 +468,7 @@ const styles = StyleSheet.create({
   deviceStatus: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#22C55E' },
   deviceStatusOff: { backgroundColor: '#F59E0B' },
 
-  tilesGrid: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  tilesGrid: { flexDirection: 'row', gap: 10, marginBottom: 18 },
   tile: { flex: 1, backgroundColor: '#161A2E', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
   tileIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
   tileText: { gap: 2 },
