@@ -10,13 +10,16 @@ import {
   Dimensions,
   Easing,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FrequencySlider } from '@/src/components/FrequencySlider';
 import { TexturedVisioball } from '@/src/components/VisioballModel';
@@ -24,12 +27,10 @@ import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 
 const { width, height } = Dimensions.get('window');
 
-// How much of the sheet peeks above the bottom when collapsed
-const PEEK_HEIGHT = 80;
-// Full sheet height
-const SHEET_HEIGHT = height * 0.72;
-// How far the sheet travels (hidden position = fully off screen below peek)
-const CLOSED_Y = SHEET_HEIGHT - PEEK_HEIGHT;
+// Peek strip height (above the safe area bottom inset)
+const PEEK_HEIGHT = 72;
+// Full expanded sheet height (from bottom of screen)
+const SHEET_HEIGHT = height * 0.74;
 
 function clamp(v: number, lo: number, hi: number) { return Math.min(Math.max(v, lo), hi); }
 
@@ -51,6 +52,7 @@ function Tile({ color, icon, onPress, sub, title }: TileProps) {
 
 export default function ControlScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { canSendCommands, connectedDevice, disconnectFromBall, isConnected, sendCommandToBall } = useBluetoothSession();
 
   const [commandDraft, setCommandDraft] = useState('STATUS?');
@@ -66,7 +68,14 @@ export default function ControlScreen() {
   const ballRotRef = useRef(ballRot);
   const panStartRef = useRef(ballRot);
 
-  // Sheet slide animation
+  // Bottom inset — how tall the system nav bar is (0 on gesture nav, ~48dp on 3-button nav)
+  // We add extra breathing room on top of the raw inset so the peek never sits flush against buttons
+  const navBarHeight = insets.bottom;
+  const SAFE_BOTTOM = navBarHeight + 16; // 16px breathing room above nav bar
+
+  // Sheet travel distance: closed = show PEEK_HEIGHT above safe bottom
+  const CLOSED_Y = SHEET_HEIGHT - PEEK_HEIGHT - SAFE_BOTTOM;
+
   const sheetY = useRef(new Animated.Value(CLOSED_Y)).current;
 
   const openSheet = () => {
@@ -88,7 +97,7 @@ export default function ControlScreen() {
     }).start(() => setSheetOpen(false));
   };
 
-  // Bounce animation on the peek handle chevrons (only when sheet is closed)
+  // Bounce chevrons when collapsed
   const bounceAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -102,22 +111,22 @@ export default function ControlScreen() {
     return () => loop.stop();
   }, [bounceAnim]);
 
-  // Sheet drag gesture
-  const dragStart = useRef(0);
+  // Sheet drag gesture — only responds to vertical drag on the handle area
+  const dragStartY = useRef(0);
   const sheetDrag = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 5,
       onPanResponderGrant: () => {
-        dragStart.current = (sheetY as any)._value ?? 0;
+        dragStartY.current = (sheetY as any)._value ?? 0;
       },
       onPanResponderMove: (_, g) => {
-        const next = clamp(dragStart.current + g.dy, 0, CLOSED_Y);
+        const next = clamp(dragStartY.current + g.dy, 0, CLOSED_Y);
         sheetY.setValue(next);
       },
       onPanResponderRelease: (_, g) => {
-        const currentY = (sheetY as any)._value ?? 0;
-        if (g.dy > 40 || currentY > CLOSED_Y * 0.5) {
+        const cur = (sheetY as any)._value ?? 0;
+        if (g.dy > 30 || cur > CLOSED_Y * 0.45) {
           closeSheet();
         } else {
           openSheet();
@@ -126,7 +135,7 @@ export default function ControlScreen() {
     })
   ).current;
 
-  // Ball rotation gesture
+  // Ball pan gesture
   const ballPan = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 4 || Math.abs(g.dy) > 4,
@@ -180,11 +189,15 @@ export default function ControlScreen() {
     closeSheet();
     setDevPanelVisible(false);
     router.replace('/scan' as Href);
-    try { await disconnectFromBall(); } catch (e) { Alert.alert('Disconnect failed', e instanceof Error ? e.message : 'Error.'); }
+    try { await disconnectFromBall(); } catch (e) {
+      Alert.alert('Disconnect failed', e instanceof Error ? e.message : 'Error.');
+    }
   };
 
   return (
     <View style={styles.screen}>
+      {/* Push status bar content down on Android */}
+      {Platform.OS === 'android' && <View style={{ height: StatusBar.currentHeight ?? 24 }} />}
 
       <View style={styles.topGlow} />
 
@@ -202,8 +215,8 @@ export default function ControlScreen() {
         </View>
       </View>
 
-      {/* Main content — sits behind sheet */}
-      <View style={styles.content}>
+      {/* Main scrollable content — padded so sheet peek never covers it */}
+      <View style={[styles.content, { paddingBottom: PEEK_HEIGHT + SAFE_BOTTOM + 12 }]}>
 
         <View style={styles.statusRow}>
           <View style={[styles.statusChip, !deviceReady && styles.statusChipOff]}>
@@ -260,40 +273,59 @@ export default function ControlScreen() {
         )}
       </View>
 
-      {/* Tap-away backdrop when sheet is open */}
-      {sheetOpen && (
-        <Pressable style={styles.backdrop} onPress={closeSheet} />
-      )}
+      {/* Tap-away backdrop */}
+      {sheetOpen && <Pressable style={styles.backdrop} onPress={closeSheet} />}
 
-      {/* PERSISTENT BOTTOM SHEET */}
-      <Animated.View style={[styles.sheet, { transform: [{ translateY: sheetY }] }]}>
-
-        {/* Draggable peek handle */}
-        <View {...sheetDrag.panHandlers} style={styles.peekHandle}>
-          <Animated.View style={[styles.chevronsWrap, { transform: [{ translateY: sheetOpen ? 0 : bounceAnim }] }]}>
-            <Ionicons name="chevron-up" size={14} color="rgba(220,38,38,0.28)" style={styles.chevronBot} />
-            <Ionicons name="chevron-up" size={14} color="rgba(220,38,38,0.6)" style={styles.chevronMid} />
-            <Ionicons name="chevron-up" size={14} color="#DC2626" />
+      {/* BOTTOM SHEET
+          Positioned so its bottom edge accounts for the system nav bar.
+          The sheet sits ABOVE the nav bar — never underneath it. */}
+      <Animated.View
+        style={[
+          styles.sheet,
+          {
+            // Extra bottom padding inside sheet so content clears nav bar
+            paddingBottom: SAFE_BOTTOM,
+            // Sheet sits above nav bar
+            bottom: navBarHeight,
+            height: SHEET_HEIGHT,
+          },
+          { transform: [{ translateY: sheetY }] },
+        ]}
+      >
+        {/* Draggable peek strip */}
+        <View {...sheetDrag.panHandlers} style={styles.peekStrip}>
+          {/* Bouncing chevrons — stop bouncing once open */}
+          <Animated.View style={[
+            styles.chevronsWrap,
+            { transform: [{ translateY: sheetOpen ? 0 : bounceAnim }] },
+          ]}>
+            <Ionicons name="chevron-up" size={13} color="rgba(220,38,38,0.25)" style={styles.chevronBot} />
+            <Ionicons name="chevron-up" size={13} color="rgba(220,38,38,0.55)" style={styles.chevronMid} />
+            <Ionicons name="chevron-up" size={13} color="#DC2626" />
           </Animated.View>
-          <Pressable onPress={sheetOpen ? closeSheet : openSheet} style={styles.peekTapArea}>
+
+          <Pressable onPress={sheetOpen ? closeSheet : openSheet} style={styles.peekCenter}>
             <View style={styles.handleBar} />
-            <Text style={styles.peekLabel}>Quick menu</Text>
+            <Text style={styles.peekLabel}>{sheetOpen ? 'Close menu' : 'Quick menu'}</Text>
           </Pressable>
+
+          {/* Subtle indicator dot for open/closed state */}
+          <View style={[styles.peekDot, sheetOpen && styles.peekDotOpen]} />
         </View>
 
-        {/* Sheet content */}
+        {/* Sheet scrollable content */}
         <ScrollView
           style={styles.sheetScroll}
           contentContainerStyle={styles.sheetContent}
           showsVerticalScrollIndicator={false}
           scrollEnabled={sheetOpen}
+          keyboardShouldPersistTaps="handled"
         >
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>Controls</Text>
             <Text style={styles.sheetSub}>CricTrack v2 · Device {suffix}</Text>
           </View>
 
-          {/* Device card */}
           <Pressable
             onPress={() => { if (!deviceReady) { closeSheet(); router.replace('/scan' as Href); } }}
             style={({ pressed }) => [styles.deviceCard, pressed && styles.pressed]}
@@ -308,7 +340,6 @@ export default function ControlScreen() {
             <View style={[styles.deviceStatus, !deviceReady && styles.deviceStatusOff]} />
           </Pressable>
 
-          {/* Tiles */}
           <View style={styles.tilesGrid}>
             <Tile color="#22C55E" icon="musical-notes" sub="EQ · bass · mix"
               title="Audio" onPress={() => { closeSheet(); router.push('/sound' as Href); }} />
@@ -318,7 +349,6 @@ export default function ControlScreen() {
               title="Settings" onPress={() => setDevPanelVisible(v => !v)} />
           </View>
 
-          {/* Sleep toggle */}
           <Pressable onPress={() => setSleepMode(v => !v)} style={({ pressed }) => [styles.sheetSleepRow, pressed && styles.pressed]}>
             <Text style={styles.sheetSleepText}>Sleep mode</Text>
             <View style={[styles.track, sleepMode && styles.trackOn]}>
@@ -326,7 +356,6 @@ export default function ControlScreen() {
             </View>
           </Pressable>
 
-          {/* Developer panel */}
           {devPanelVisible && (
             <View style={styles.devPanel}>
               <View style={styles.devActions}>
@@ -377,7 +406,7 @@ const styles = StyleSheet.create({
   ballStage: { height: 300, alignItems: 'center', justifyContent: 'center' },
   canvasWrap: { width: Math.min(width, 390), height: 280 },
 
-  content: { flex: 1, paddingHorizontal: 20, paddingBottom: PEEK_HEIGHT + 8 },
+  content: { flex: 1, paddingHorizontal: 20 },
 
   statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
   statusChip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(34,197,94,0.08)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(34,197,94,0.25)', paddingHorizontal: 12, paddingVertical: 7 },
@@ -392,7 +421,7 @@ const styles = StyleSheet.create({
   volHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   volVal: { color: '#8892A8', fontSize: 12, fontWeight: '700' },
 
-  transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginTop: 22, marginBottom: 0 },
+  transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginTop: 22 },
   arrowBtn: { width: 52, height: 52, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', alignItems: 'center', justifyContent: 'center' },
   playBtn: { width: 68, height: 68, borderRadius: 22, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center', shadowColor: '#DC2626', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 10 },
   playBtnOff: { backgroundColor: '#1C2238', shadowOpacity: 0 },
@@ -412,23 +441,19 @@ const styles = StyleSheet.create({
   scanBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#22C55E', borderRadius: 14, paddingVertical: 14, marginTop: 16 },
   scanBtnText: { color: '#080B14', fontSize: 15, fontWeight: '800' },
 
-  // Backdrop
-  backdrop: { position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.45)', zIndex: 10 },
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', zIndex: 10 },
 
-  // Bottom sheet
+  // Sheet — bottom is set dynamically in JSX to sit above nav bar
   sheet: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
-    height: SHEET_HEIGHT,
     backgroundColor: '#0F1220',
     borderTopLeftRadius: 26,
     borderTopRightRadius: 26,
     borderTopWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     zIndex: 20,
-    // Shadow upward
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -6 },
     shadowOpacity: 0.35,
@@ -436,26 +461,26 @@ const styles = StyleSheet.create({
     elevation: 24,
   },
 
-  // Peek handle — always visible, draggable
-  peekHandle: {
+  // Peek strip — full-width drag target at the top of the sheet
+  peekStrip: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 10,
-    gap: 12,
+    paddingVertical: 14,
+    gap: 10,
   },
-  chevronsWrap: { alignItems: 'center' },
+  chevronsWrap: { alignItems: 'center', width: 20 },
   chevronBot: { marginBottom: -7 },
   chevronMid: { marginBottom: -7 },
-  peekTapArea: { flex: 1, alignItems: 'center', gap: 6 },
+  peekCenter: { flex: 1, alignItems: 'center', gap: 5 },
   handleBar: { width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)' },
-  peekLabel: { color: '#4A5268', fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+  peekLabel: { color: '#4A5268', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+  peekDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#2A3050' },
+  peekDotOpen: { backgroundColor: '#DC2626' },
 
-  // Sheet inner content
   sheetScroll: { flex: 1 },
-  sheetContent: { paddingHorizontal: 18, paddingBottom: 40 },
-  sheetHeader: { marginBottom: 16, marginTop: 4 },
+  sheetContent: { paddingHorizontal: 18, paddingBottom: 20 },
+  sheetHeader: { marginBottom: 16 },
   sheetTitle: { color: '#F1F5FF', fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
   sheetSub: { color: '#4A5268', fontSize: 13, fontWeight: '500', marginTop: 4 },
 
