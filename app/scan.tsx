@@ -16,7 +16,6 @@ import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 import {
   scanForVisioballs,
   stopScanning,
-  TARGET_BLE_DEVICE_NAME,
 } from '@/src/services/bluetoothService';
 import { BallDevice } from '@/src/types/bluetooth';
 
@@ -121,7 +120,7 @@ export default function ScanScreen() {
     const isDisconnecting = disconnectingId === item.id;
     const isBusy = connectingId !== null || disconnectingId !== null;
     const isDisabled = isBusy && !isConnecting && !isDisconnecting;
-    const deviceName = item.name?.trim() || TARGET_BLE_DEVICE_NAME;
+    const deviceName = item.name?.trim() || 'VisioBall Device';
     const buttonLabel = isDisconnecting
       ? 'Disconnecting...'
       : isRowConnected
@@ -174,7 +173,7 @@ export default function ScanScreen() {
       return (
         <View style={styles.messageCard}>
           <ActivityIndicator color={COLORS.green} />
-          <Text style={styles.messageText}>Scanning for {TARGET_BLE_DEVICE_NAME}...</Text>
+          <Text style={styles.messageText}>Scanning for compatible devices...</Text>
         </View>
       );
     }
@@ -193,8 +192,8 @@ export default function ScanScreen() {
     if (devices.length === 0) {
       return (
         <View style={styles.messageCard}>
-          <Text style={styles.emptyTitle}>No Visioball found</Text>
-          <Text style={styles.messageText}>Move closer to the ESP32 and try scanning again.</Text>
+          <Text style={styles.emptyTitle}>No compatible device found</Text>
+          <Text style={styles.messageText}>Move closer to the ball and try scanning again.</Text>
           <Pressable style={styles.inlineButton} onPress={() => void loadDevices()}>
             <Text style={styles.inlineButtonText}>Scan Again</Text>
           </Pressable>

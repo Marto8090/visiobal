@@ -12,7 +12,7 @@ import { BallDevice } from '../types/bluetooth';
 const SCAN_DURATION_MS = 8000;
 const DISCONNECT_TIMEOUT_MS = 5000;
 const ADVERTISING_RECOVERY_MS = 1500;
-export const TARGET_BLE_DEVICE_NAME = 'ESP32_BLE_Prototype';
+export const TARGET_BLE_DEVICE_NAME = 'VisioBal';
 export const COMMAND_SERVICE_UUID = '6E400001-B5A3-F393-E0A9-E50E24DCCA9E';
 export const COMMAND_CHARACTERISTIC_UUID = '6E400002-B5A3-F393-E0A9-E50E24DCCA9E';
 type BleRuntime = typeof import('react-native-ble-plx');

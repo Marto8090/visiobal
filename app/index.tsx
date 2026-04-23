@@ -1,12 +1,11 @@
+import { Canvas } from '@react-three/fiber/native';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
+  Dimensions,
   Easing,
-  FlatList,
-  Pressable,
   StatusBar,
   StyleSheet,
   Text,
@@ -14,264 +13,175 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
-import {
-  scanForVisioballs,
-  stopScanning,
-  TARGET_BLE_DEVICE_NAME,
-} from '@/src/services/bluetoothService';
-import { BallDevice } from '@/src/types/bluetooth';
+import { BackgroundDust, TexturedVisioball } from '@/src/components/VisioballModel';
 
-export default function ScanScreen() {
+const { width } = Dimensions.get('window');
+const LOADER_WIDTH = 132;
+const LOADER_DOT_SIZE = 12;
+
+export default function IndexScreen() {
   const router = useRouter();
-  const { connectToBall, disconnectFromBall, connectedDevice, isConnected } = useBluetoothSession();
-
-  const [devices, setDevices] = useState<BallDevice[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [connectingId, setConnectingId] = useState<string | null>(null);
-  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
-  const [connectedDeviceId, setConnectedDeviceId] = useState<string | null>(
-    isConnected ? connectedDevice?.id ?? null : null
-  );
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  // Pulse animation for the beacon
-  const pulseAnim = useRef(new Animated.Value(0)).current;
+  const progress = useRef(new Animated.Value(0)).current;
+  const redirectedRef = useRef(false);
 
   useEffect(() => {
-    Animated.loop(
-      Animated.timing(pulseAnim, {
-        toValue: 1,
-        duration: 2200,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      })
-    ).start();
-  }, [pulseAnim]);
+    const duration = 2000 + Math.floor(Math.random() * 2001);
 
-  const pulseScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.6] });
-  const pulseOpacity = pulseAnim.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0.5, 0.15, 0] });
+    const animation = Animated.timing(progress, {
+      toValue: 1,
+      duration,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: false,
+    });
 
-  const loadDevices = useCallback(async () => {
-    setLoading(true);
-    setErrorMessage(null);
-    setDevices([]);
-    try {
-      const found = await scanForVisioballs();
-      setDevices(found);
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Failed to scan for Bluetooth devices.';
-      setErrorMessage(msg);
-      Alert.alert('Bluetooth scan failed', msg);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    animation.start(({ finished }) => {
+      if (!finished || redirectedRef.current) {
+        return;
+      }
 
-  useEffect(() => {
-    void loadDevices();
-    return () => { void stopScanning(); };
-  }, [loadDevices]);
+      redirectedRef.current = true;
+      router.replace('/scan');
+    });
 
-  useEffect(() => {
-    if (isConnected && connectedDevice) { setConnectedDeviceId(connectedDevice.id); return; }
-    setConnectedDeviceId(null);
-  }, [connectedDevice, isConnected]);
+    return () => {
+      progress.stopAnimation();
+    };
+  }, [progress, router]);
 
-  const handleConnect = async (device: BallDevice) => {
-    try {
-      setConnectingId(device.id);
-      const success = await connectToBall(device);
-      if (success) { setConnectedDeviceId(device.id); return; }
-      Alert.alert('Failed', 'Could not connect to the ball.');
-    } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Something went wrong while connecting.');
-    } finally {
-      setConnectingId(null);
-    }
-  };
+  const fillWidth = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, LOADER_WIDTH],
+  });
 
-  const handleDisconnect = async (device: BallDevice) => {
-    try {
-      setDisconnectingId(device.id);
-      await disconnectFromBall();
-      setConnectedDeviceId(null);
-    } catch (error) {
-      Alert.alert('Disconnect failed', error instanceof Error ? error.message : 'Something went wrong.');
-    } finally {
-      setDisconnectingId(null);
-    }
-  };
-
-  const renderDevice = ({ item }: { item: BallDevice }) => {
-    const isRowConnected = connectedDeviceId === item.id;
-    const isConnecting = connectingId === item.id;
-    const isDisconnecting = disconnectingId === item.id;
-    const isBusy = connectingId !== null || disconnectingId !== null;
-    const isDisabled = isBusy && !isConnecting && !isDisconnecting;
-    const deviceName = item.name?.trim() || TARGET_BLE_DEVICE_NAME;
-    const label = isDisconnecting ? 'Disconnecting…' : isRowConnected ? 'Disconnect' : isConnecting ? 'Connecting…' : 'Connect';
-
-    return (
-      <Pressable
-        disabled={isDisabled || isConnecting || isDisconnecting}
-        onPress={() => isRowConnected ? void handleDisconnect(item) : void handleConnect(item)}
-        style={({ pressed }) => [styles.deviceRow, isRowConnected && styles.deviceRowConnected, pressed && !isDisabled && styles.pressed]}
-      >
-        <View style={[styles.deviceDot, isRowConnected && styles.deviceDotActive]} />
-        <View style={styles.deviceText}>
-          <Text style={styles.deviceName} numberOfLines={1}>{deviceName}</Text>
-          <Text style={styles.deviceId} numberOfLines={1}>{item.id}{item.rssi != null ? `  ·  ${item.rssi} dBm` : ''}</Text>
-        </View>
-        <View style={[styles.connectBtn, isRowConnected && styles.connectBtnActive, (isDisabled && !isRowConnected) && styles.connectBtnDisabled]}>
-          {(isConnecting || isDisconnecting) ? (
-            <ActivityIndicator size="small" color={isRowConnected ? '#080B14' : '#F1F5FF'} />
-          ) : (
-            <Text style={[styles.connectBtnText, isRowConnected && styles.connectBtnTextActive]}>{label}</Text>
-          )}
-        </View>
-      </Pressable>
-    );
-  };
-
-  const renderContent = () => {
-    if (loading) return (
-      <View style={styles.emptyState}>
-        <ActivityIndicator color="#DC2626" size="large" />
-        <Text style={styles.emptyText}>Scanning for {TARGET_BLE_DEVICE_NAME}…</Text>
-      </View>
-    );
-
-    if (errorMessage) return (
-      <View style={styles.emptyState}>
-        <Text style={styles.errorText}>{errorMessage}</Text>
-        <Pressable style={({ pressed }) => [styles.retryBtn, pressed && styles.pressed]} onPress={() => void loadDevices()}>
-          <Text style={styles.retryBtnText}>Try again</Text>
-        </Pressable>
-      </View>
-    );
-
-    if (devices.length === 0) return (
-      <View style={styles.emptyState}>
-        <Text style={styles.emptyTitle}>No device found</Text>
-        <Text style={styles.emptyText}>Move closer to the VisioBall and try again.</Text>
-        <Pressable style={({ pressed }) => [styles.retryBtn, pressed && styles.pressed]} onPress={() => void loadDevices()}>
-          <Text style={styles.retryBtnText}>Scan again</Text>
-        </Pressable>
-      </View>
-    );
-
-    return (
-      <FlatList
-        data={devices}
-        keyExtractor={(item) => item.id}
-        renderItem={renderDevice}
-        scrollEnabled={devices.length > 4}
-        showsVerticalScrollIndicator={false}
-      />
-    );
-  };
+  const dotTranslateX = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, LOADER_WIDTH - LOADER_DOT_SIZE],
+  });
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="light-content" backgroundColor="#080B14" />
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="#091121" />
+
       <View style={styles.container}>
+        <View style={styles.hero}>
+          <View style={styles.outerGlow} />
+          <View style={styles.midGlow} />
 
-        <View style={styles.header}>
-          <Text style={styles.title}>Connect to{'\n'}VisioBall</Text>
-          <Text style={styles.subtitle}>Make sure your ball is powered on</Text>
-        </View>
-
-        {/* Beacon animation */}
-        <View style={styles.beaconWrap}>
-          <Animated.View style={[styles.beaconPulse, { transform: [{ scale: pulseScale }], opacity: pulseOpacity }]} />
-          <View style={styles.beaconCore}>
-            <View style={styles.beaconBall} />
+          <View style={styles.canvasWrap}>
+            <Suspense fallback={<ActivityIndicator size="large" color="#F05568" />}>
+              <Canvas camera={{ position: [0, 0, 6.2], fov: 42 }}>
+                <ambientLight intensity={0.8} color="#ffffff" />
+                <directionalLight position={[6, 8, 8]} intensity={2.2} color="#ffffff" />
+                <directionalLight position={[-6, 4, 4]} intensity={1.4} color="#FF8A98" />
+                <directionalLight position={[0, -8, 5]} intensity={0.9} color="#4B1631" />
+                <BackgroundDust />
+                <TexturedVisioball rotationX={0.12} rotationY={0.2} />
+              </Canvas>
+            </Suspense>
           </View>
-          <Text style={styles.beaconLabel}>{loading ? 'Scanning…' : `${devices.length} device${devices.length !== 1 ? 's' : ''} found`}</Text>
         </View>
 
-        {/* Device panel */}
-        <View style={styles.panel}>
-          <View style={styles.panelHeader}>
-            <Text style={styles.panelTitle}>Nearby devices</Text>
-            <Pressable style={({ pressed }) => [styles.rescanBtn, pressed && styles.pressed]} onPress={() => void loadDevices()} disabled={loading}>
-              <Text style={styles.rescanText}>{loading ? 'Scanning…' : 'Rescan'}</Text>
-            </Pressable>
+        <Text style={styles.title}>VisioBall</Text>
+
+        <View style={styles.loaderSection}>
+          <View style={styles.loaderTrack}>
+            <Animated.View style={[styles.loaderFill, { width: fillWidth }]} />
+            <Animated.View
+              style={[
+                styles.loaderDot,
+                {
+                  transform: [{ translateX: dotTranslateX }],
+                },
+              ]}
+            />
           </View>
 
-          <View style={styles.divider} />
-          <View style={styles.devicesArea}>{renderContent()}</View>
-
-          <Pressable
-            disabled={!connectedDeviceId}
-            onPress={() => connectedDeviceId && router.replace('/control')}
-            style={({ pressed }) => [styles.continueBtn, !connectedDeviceId && styles.continueBtnDisabled, pressed && connectedDeviceId && styles.pressed]}
-          >
-            <Text style={[styles.continueBtnText, !connectedDeviceId && styles.continueBtnTextDisabled]}>Continue</Text>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [styles.skipBtn, pressed && styles.pressed]}
-            onPress={() => router.replace('/control')}
-          >
-            <Text style={styles.skipText}>Skip for now</Text>
-          </Pressable>
+          <Text style={styles.loaderLabel}>Loading</Text>
         </View>
-
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#080B14' },
-  container: { flex: 1, backgroundColor: '#080B14', paddingHorizontal: 20, paddingTop: 44, paddingBottom: 24 },
-
-  header: { marginBottom: 28 },
-  title: { color: '#F1F5FF', fontSize: 30, fontWeight: '900', letterSpacing: -0.5, lineHeight: 36 },
-  subtitle: { color: '#4A5268', fontSize: 14, fontWeight: '500', marginTop: 6 },
-
-  beaconWrap: { alignItems: 'center', marginBottom: 28, height: 88 },
-  beaconPulse: { position: 'absolute', width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(220,38,38,0.35)' },
-  beaconCore: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#161A2E', borderWidth: 1.5, borderColor: 'rgba(220,38,38,0.35)', alignItems: 'center', justifyContent: 'center' },
-  beaconBall: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#DC2626' },
-  beaconLabel: { color: '#8892A8', fontSize: 12, fontWeight: '600', marginTop: 8, letterSpacing: 0.5 },
-
-  panel: { flex: 1, backgroundColor: '#0F1220', borderRadius: 24, padding: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
-  panelHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  panelTitle: { color: '#8892A8', fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' },
-  rescanBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8, backgroundColor: '#1C2238' },
-  rescanText: { color: '#DC2626', fontSize: 12, fontWeight: '700' },
-  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginBottom: 14 },
-  devicesArea: { flex: 1, minHeight: 200 },
-
-  deviceRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#161A2E', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
-  deviceRowConnected: { borderColor: 'rgba(34,197,94,0.35)', backgroundColor: '#0F1D18' },
-  deviceDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#2A3050', marginRight: 12 },
-  deviceDotActive: { backgroundColor: '#22C55E' },
-  deviceText: { flex: 1, marginRight: 10 },
-  deviceName: { color: '#F1F5FF', fontSize: 14, fontWeight: '700' },
-  deviceId: { color: '#4A5268', fontSize: 11, fontWeight: '500', marginTop: 2 },
-  connectBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: '#1C2238', minWidth: 92, alignItems: 'center' },
-  connectBtnActive: { backgroundColor: '#22C55E' },
-  connectBtnDisabled: { opacity: 0.4 },
-  connectBtnText: { color: '#F1F5FF', fontSize: 12, fontWeight: '800' },
-  connectBtnTextActive: { color: '#080B14' },
-
-  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 20 },
-  emptyTitle: { color: '#F1F5FF', fontSize: 16, fontWeight: '800' },
-  emptyText: { color: '#4A5268', fontSize: 13, fontWeight: '500', textAlign: 'center', lineHeight: 20 },
-  errorText: { color: '#FF6B6B', fontSize: 14, fontWeight: '600', textAlign: 'center' },
-  retryBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10, backgroundColor: '#161A2E', marginTop: 8 },
-  retryBtnText: { color: '#DC2626', fontSize: 13, fontWeight: '700' },
-
-  continueBtn: { height: 54, borderRadius: 14, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center', marginTop: 16 },
-  continueBtnDisabled: { backgroundColor: '#161A2E', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
-  continueBtnText: { color: '#F1F5FF', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
-  continueBtnTextDisabled: { color: '#4A5268' },
-  skipBtn: { height: 46, alignItems: 'center', justifyContent: 'center', marginTop: 6 },
-  skipText: { color: '#4A5268', fontSize: 14, fontWeight: '600' },
-
-  pressed: { opacity: 0.75, transform: [{ scale: 0.97 }] },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#091121',
+  },
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#091121',
+    paddingTop: 28,
+    paddingBottom: 86,
+  },
+  hero: {
+    width,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  outerGlow: {
+    position: 'absolute',
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: 'rgba(93, 24, 54, 0.24)',
+  },
+  midGlow: {
+    position: 'absolute',
+    width: 228,
+    height: 228,
+    borderRadius: 114,
+    backgroundColor: 'rgba(143, 32, 62, 0.22)',
+  },
+  canvasWrap: {
+    width,
+    height: width,
+  },
+  title: {
+    marginTop: -16,
+    color: '#F4F7FF',
+    fontSize: 28,
+    fontWeight: '900',
+    letterSpacing: -0.4,
+  },
+  loaderSection: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  loaderTrack: {
+    width: LOADER_WIDTH,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: '#21314C',
+    overflow: 'hidden',
+    justifyContent: 'center',
+  },
+  loaderFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 999,
+    backgroundColor: '#22D16F',
+  },
+  loaderDot: {
+    position: 'absolute',
+    width: LOADER_DOT_SIZE,
+    height: LOADER_DOT_SIZE,
+    borderRadius: LOADER_DOT_SIZE / 2,
+    backgroundColor: '#1FB85F',
+    shadowColor: '#22D16F',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  loaderLabel: {
+    color: '#6F7D99',
+    fontSize: 14,
+    fontWeight: '500',
+  },
 });
