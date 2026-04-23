@@ -59,6 +59,7 @@ export default function ControlScreen() {
   const [devPanelVisible, setDevPanelVisible] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sleepSending, setSleepSending] = useState(false);
   const [sleepMode, setSleepMode] = useState(false);
   const [volume, setVolume] = useState(57);
   const [lastCmd, setLastCmd] = useState<string | null>(null);
@@ -184,6 +185,36 @@ export default function ControlScreen() {
     } finally { setSending(false); }
   };
 
+  const handleSleepModeToggle = async () => {
+    const nextSleepMode = !sleepMode;
+
+    if (!deviceReady) {
+      router.replace('/scan' as Href);
+      return;
+    }
+
+    if (!canSendCommands) {
+      Alert.alert('Sleep unavailable', 'The BLE command channel is not ready yet.');
+      return;
+    }
+
+    try {
+      setSleepSending(true);
+
+      const command = nextSleepMode ? 'SLEEP' : 'WAKE';
+      await sendCommandToBall(command);
+      setSleepMode(nextSleepMode);
+      setLastCmd(command);
+    } catch (e) {
+      Alert.alert(
+        'Sleep command failed',
+        e instanceof Error ? e.message : 'Could not change the device sleep mode.'
+      );
+    } finally {
+      setSleepSending(false);
+    }
+  };
+
   const handleDisconnect = async () => {
     setIsPlaying(false);
     closeSheet();
@@ -255,10 +286,15 @@ export default function ControlScreen() {
 
         <View style={styles.divider} />
 
-        <Pressable onPress={() => setSleepMode(v => !v)} style={({ pressed }) => [styles.sleepRow, pressed && styles.pressed]}>
+        <Pressable
+          disabled={sleepSending}
+          onPress={() => void handleSleepModeToggle()}
+          style={({ pressed }) => [styles.sleepRow, pressed && styles.pressed, sleepSending && styles.disabledPressable]}>
           <View>
             <Text style={styles.sleepTitle}>Sleep mode</Text>
-            <Text style={styles.sleepSub}>Power save when idle</Text>
+            <Text style={styles.sleepSub}>
+              {sleepSending ? 'Updating device sleep state...' : 'Power save when idle'}
+            </Text>
           </View>
           <View style={[styles.track, sleepMode && styles.trackOn]}>
             <View style={[styles.thumb, sleepMode && styles.thumbOn]} />
@@ -349,7 +385,10 @@ export default function ControlScreen() {
               title="Settings" onPress={() => setDevPanelVisible(v => !v)} />
           </View>
 
-          <Pressable onPress={() => setSleepMode(v => !v)} style={({ pressed }) => [styles.sheetSleepRow, pressed && styles.pressed]}>
+          <Pressable
+            disabled={sleepSending}
+            onPress={() => void handleSleepModeToggle()}
+            style={({ pressed }) => [styles.sheetSleepRow, pressed && styles.pressed, sleepSending && styles.disabledPressable]}>
             <Text style={styles.sheetSleepText}>Sleep mode</Text>
             <View style={[styles.track, sleepMode && styles.trackOn]}>
               <View style={[styles.thumb, sleepMode && styles.thumbOn]} />
@@ -508,6 +547,7 @@ const styles = StyleSheet.create({
   devBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#161A2E', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', paddingVertical: 12 },
   devBtnDisabled: { opacity: 0.4 },
   devBtnText: { color: '#F1F5FF', fontSize: 13, fontWeight: '700' },
+  disabledPressable: { opacity: 0.55 },
   devLabel: { color: '#4A5268', fontSize: 10, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 14, marginBottom: 8 },
   cmdRow: { flexDirection: 'row', gap: 10 },
   cmdInput: { flex: 1, backgroundColor: '#0F1220', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', color: '#F1F5FF', fontSize: 14, fontWeight: '600', paddingHorizontal: 14, paddingVertical: 11 },
