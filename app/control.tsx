@@ -39,15 +39,12 @@ function clamp(v: number, lo: number, hi: number) { return Math.min(Math.max(v, 
 type TileProps = { color: string; icon: keyof typeof Ionicons.glyphMap; onPress: () => void; sub: string; title: string };
 function Tile({ color, icon, onPress, sub, title }: TileProps) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.tile, pressed && styles.pressed]}>
-      <View style={[styles.tileIcon, { backgroundColor: `${color}22` }]}>
-        <Ionicons color={color} name={icon} size={20} />
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.tile, { borderColor: `${color}50` }, pressed && styles.pressed]}>
+      <View style={[styles.tileIconWrap, { backgroundColor: `${color}22` }]}>
+        <Ionicons color={color} name={icon} size={28} />
       </View>
-      <View style={styles.tileText}>
-        <Text style={styles.tileTitle}>{title}</Text>
-        <Text style={styles.tileSub}>{sub}</Text>
-      </View>
-      <Ionicons color="#4A5268" name="chevron-forward" size={16} />
+      <Text style={styles.tileTitle}>{title}</Text>
+      <Text style={styles.tileSub}>{sub}</Text>
     </Pressable>
   );
 }
@@ -345,9 +342,9 @@ export default function ControlScreen() {
             styles.chevronsWrap,
             { transform: [{ translateY: sheetOpen ? 0 : bounceAnim }] },
           ]}>
-            <Ionicons name="chevron-up" size={13} color="rgba(220,38,38,0.25)" style={styles.chevronBot} />
-            <Ionicons name="chevron-up" size={13} color="rgba(220,38,38,0.55)" style={styles.chevronMid} />
-            <Ionicons name="chevron-up" size={13} color="#DC2626" />
+            <Ionicons name="chevron-up" size={13} color="rgba(168,85,247,0.25)" style={styles.chevronBot} />
+            <Ionicons name="chevron-up" size={13} color="rgba(168,85,247,0.55)" style={styles.chevronMid} />
+            <Ionicons name="chevron-up" size={13} color="#A855F7" />
           </Animated.View>
 
           <Pressable onPress={sheetOpen ? closeSheet : openSheet} style={styles.peekCenter}>
@@ -387,11 +384,11 @@ export default function ControlScreen() {
           </Pressable>
 
           <View style={styles.tilesGrid}>
-            <Tile color="#22C55E" icon="musical-notes" sub="EQ · bass · mix"
+            <Tile color="#A855F7" icon="musical-notes" sub="EQ · bass · mix"
               title="Audio" onPress={() => { closeSheet(); router.push('/sound' as Href); }} />
-            <Tile color="#F59E0B" icon="locate" sub="Radar · GPS"
+            <Tile color="#60A5FA" icon="locate" sub="Radar · GPS"
               title="Locate" onPress={() => { closeSheet(); router.push('/radar' as Href); }} />
-            <Tile color="#DC2626" icon="settings" sub="Alerts · device"
+            <Tile color="#F472B6" icon="settings-sharp" sub="Alerts · device"
               title="Settings" onPress={() => setDevPanelVisible(v => !v)} />
           </View>
 
@@ -399,7 +396,10 @@ export default function ControlScreen() {
             disabled={sleepSending}
             onPress={() => void handleSleepModeToggle()}
             style={({ pressed }) => [styles.sheetSleepRow, pressed && styles.pressed, sleepSending && styles.disabledPressable]}>
-            <Text style={styles.sheetSleepText}>Sleep mode</Text>
+            <View>
+              <Text style={styles.sheetSleepText}>Sleep mode</Text>
+              <Text style={styles.sheetSleepSub}>{sleepSending ? 'Updating...' : 'Power save when idle'}</Text>
+            </View>
             <View style={[styles.track, sleepMode && styles.trackOn]}>
               <View style={[styles.thumb, sleepMode && styles.thumbOn]} />
             </View>
@@ -484,10 +484,10 @@ const styles = StyleSheet.create({
   sleepTitle: { color: '#8892A8', fontSize: 15, fontWeight: '700' },
   sleepSub: { color: '#4A5268', fontSize: 12, fontWeight: '500', marginTop: 2 },
 
-  track: { width: 48, height: 28, borderRadius: 14, backgroundColor: '#1C2238', padding: 3 },
-  trackOn: { backgroundColor: '#22C55E' },
-  thumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#4A5268' },
-  thumbOn: { backgroundColor: '#080B14', transform: [{ translateX: 20 }] },
+  track: { width: 48, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.08)', padding: 3 },
+  trackOn: { backgroundColor: '#A855F7' },
+  thumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#4A5568' },
+  thumbOn: { backgroundColor: '#fff', transform: [{ translateX: 20 }] },
 
   scanBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#22C55E', borderRadius: 14, paddingVertical: 14, marginTop: 16 },
   scanBtnText: { color: '#080B14', fontSize: 15, fontWeight: '800' },
@@ -499,20 +499,20 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    backgroundColor: '#0F1220',
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
+    backgroundColor: '#0D1628',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
     borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(168,85,247,0.18)',
     zIndex: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    elevation: 24,
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    elevation: 28,
   },
 
-  // Peek strip — full-width drag target at the top of the sheet
+  // Peek strip
   peekStrip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -523,49 +523,78 @@ const styles = StyleSheet.create({
   chevronsWrap: { alignItems: 'center', width: 20 },
   chevronBot: { marginBottom: -7 },
   chevronMid: { marginBottom: -7 },
-  peekCenter: { flex: 1, alignItems: 'center', gap: 5 },
-  handleBar: { width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)' },
-  peekLabel: { color: '#4A5268', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
-  peekDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#2A3050' },
-  peekDotOpen: { backgroundColor: '#DC2626' },
+  peekCenter: { flex: 1, alignItems: 'center', gap: 6 },
+  handleBar: { width: 44, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.18)' },
+  peekLabel: { color: '#8A9BBF', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  peekDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#1E2A45' },
+  peekDotOpen: { backgroundColor: '#A855F7' },
 
   sheetScroll: { flex: 1 },
   sheetContent: { paddingHorizontal: 18, paddingBottom: 20 },
-  sheetHeader: { marginBottom: 16 },
-  sheetTitle: { color: '#F1F5FF', fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
-  sheetSub: { color: '#4A5268', fontSize: 13, fontWeight: '500', marginTop: 4 },
+  sheetHeader: { marginBottom: 18 },
+  sheetTitle: { color: '#F4F7FF', fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
+  sheetSub: { color: '#7A8CAE', fontSize: 13, fontWeight: '500', marginTop: 4 },
 
-  deviceCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#161A2E', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
-  deviceBall: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  deviceBallLine: { width: 42, height: 1, backgroundColor: 'rgba(255,255,255,0.3)', transform: [{ rotate: '6deg' }] },
-  deviceCardText: { flex: 1, marginLeft: 12 },
-  deviceCardTitle: { color: '#F1F5FF', fontSize: 16, fontWeight: '800' },
-  deviceCardSub: { color: '#4A5268', fontSize: 13, fontWeight: '500', marginTop: 2 },
+  deviceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.09)',
+  },
+  deviceBall: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  deviceBallLine: { width: 48, height: 1, backgroundColor: 'rgba(255,255,255,0.3)', transform: [{ rotate: '6deg' }] },
+  deviceCardText: { flex: 1, marginLeft: 13 },
+  deviceCardTitle: { color: '#F4F7FF', fontSize: 16, fontWeight: '800' },
+  deviceCardSub: { color: '#7A8CAE', fontSize: 12, fontWeight: '500', marginTop: 2 },
   deviceStatus: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#22C55E' },
   deviceStatusOff: { backgroundColor: '#F59E0B' },
 
-  tilesGrid: { flexDirection: 'row', gap: 10, marginBottom: 18 },
-  tile: { flex: 1, backgroundColor: '#161A2E', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
-  tileIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
-  tileText: { gap: 2 },
-  tileTitle: { color: '#F1F5FF', fontSize: 13, fontWeight: '800' },
-  tileSub: { color: '#4A5268', fontSize: 11, fontWeight: '500' },
+  tilesGrid: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  tile: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 20,
+    padding: 14,
+    paddingBottom: 16,
+    borderWidth: 1,
+    gap: 12,
+  },
+  tileIconWrap: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  tileTitle: { color: '#F4F7FF', fontSize: 14, fontWeight: '800' },
+  tileSub: { color: '#7A8CAE', fontSize: 11, fontWeight: '500' },
 
-  sheetSleepRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, paddingHorizontal: 4, marginBottom: 4 },
-  sheetSleepText: { color: '#F1F5FF', fontSize: 18, fontWeight: '800' },
+  sheetSleepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  sheetSleepText: { color: '#F4F7FF', fontSize: 15, fontWeight: '800' },
+  sheetSleepSub: { color: '#7A8CAE', fontSize: 12, fontWeight: '500', marginTop: 2 },
 
-  devPanel: { backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 16, padding: 14, marginTop: 4, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)' },
+  devPanel: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 18, padding: 14, marginTop: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   devActions: { flexDirection: 'row', gap: 10, marginBottom: 4 },
-  devBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#161A2E', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', paddingVertical: 12 },
+  devBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)', paddingVertical: 12 },
   devBtnDisabled: { opacity: 0.4 },
-  devBtnText: { color: '#F1F5FF', fontSize: 13, fontWeight: '700' },
+  devBtnText: { color: '#F4F7FF', fontSize: 13, fontWeight: '700' },
   disabledPressable: { opacity: 0.55 },
-  devLabel: { color: '#4A5268', fontSize: 10, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 14, marginBottom: 8 },
+  devLabel: { color: '#7A8CAE', fontSize: 10, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 14, marginBottom: 8 },
   cmdRow: { flexDirection: 'row', gap: 10 },
-  cmdInput: { flex: 1, backgroundColor: '#0F1220', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', color: '#F1F5FF', fontSize: 14, fontWeight: '600', paddingHorizontal: 14, paddingVertical: 11 },
-  sendBtn: { width: 48, backgroundColor: '#22C55E', borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  cmdInput: { flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', color: '#F4F7FF', fontSize: 14, fontWeight: '600', paddingHorizontal: 14, paddingVertical: 11 },
+  sendBtn: { width: 48, backgroundColor: '#A855F7', borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   sendBtnDisabled: { opacity: 0.4 },
-  lastCmd: { color: '#22C55E', fontSize: 12, fontWeight: '600', marginTop: 10 },
+  lastCmd: { color: '#A855F7', fontSize: 12, fontWeight: '600', marginTop: 10 },
 
   footer: { color: '#2A3050', fontSize: 12, fontWeight: '600', textAlign: 'center', marginTop: 20 },
 
