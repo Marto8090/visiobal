@@ -12,7 +12,7 @@ import {
   PanResponder,
   Platform,
   Pressable,
-  ScrollView,
+
   StatusBar,
   StyleSheet,
   Text,
@@ -30,9 +30,9 @@ import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 const { width, height } = Dimensions.get('window');
 
 // Peek strip height (above the safe area bottom inset)
-const PEEK_HEIGHT = 72;
+const PEEK_HEIGHT = 48;
 // Full expanded sheet height (from bottom of screen)
-const SHEET_HEIGHT = height * 0.74;
+const SHEET_HEIGHT = height * 0.60;
 
 function clamp(v: number, lo: number, hi: number) { return Math.min(Math.max(v, lo), hi); }
 
@@ -67,18 +67,22 @@ export default function ControlScreen() {
 
   const ballRotRef = useRef(ballRot);
   const panStartRef = useRef(ballRot);
-  const scrollYRef = useRef(0);
   const glowY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowY, { toValue: -12, duration: 2100, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(glowY, { toValue: 12, duration: 2100, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
+    let rafId: number;
+    const startTime = Date.now();
+
+    const tick = () => {
+      const elapsed = (Date.now() - startTime) / 1000;
+      // Exact same formula as TexturedVisioball: Math.sin(time * 1.5) * 0.2
+      // Scaled to screen pixels (~12px) and inverted (3D up = screen negative Y)
+      glowY.setValue(-Math.sin(elapsed * 1.5) * 12);
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
   }, [glowY]);
 
   // Bottom inset — how tall the system nav bar is (0 on gesture nav, ~48dp on 3-button nav)
@@ -125,20 +129,13 @@ export default function ControlScreen() {
     return () => loop.stop();
   }, [bounceAnim]);
 
-  // Sheet drag — lives on the whole sheet, scroll-aware
+  // Sheet drag — lives on the whole sheet
   const dragStartY = useRef(0);
   const sheetDrag = useRef(
     PanResponder.create({
       // Never pre-emptively claim touch start — lets taps reach Pressables
       onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, g) => {
-        if (Math.abs(g.dy) < 6) return false;
-        const atTop = scrollYRef.current <= 0;
-        const goingDown = g.dy > 0;
-        const sheetIsOpen = ((sheetY as any)._value ?? CLOSED_Y) < 20;
-        // Always capture when sheet is closing/closed; only capture scroll-to-dismiss at top
-        return !sheetIsOpen || (atTop && goingDown);
-      },
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) >= 6,
       onPanResponderGrant: () => {
         dragStartY.current = (sheetY as any)._value ?? 0;
       },
@@ -314,23 +311,6 @@ export default function ControlScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.divider} />
-
-        <Pressable
-          disabled={sleepSending}
-          onPress={() => void handleSleepModeToggle()}
-          style={({ pressed }) => [styles.sleepRow, pressed && styles.pressed, sleepSending && styles.disabledPressable]}>
-          <View>
-            <Text style={styles.sleepTitle}>Sleep mode</Text>
-            <Text style={styles.sleepSub}>
-              {sleepSending ? 'Updating device sleep state...' : 'Power save when idle'}
-            </Text>
-          </View>
-          <View style={[styles.track, sleepMode && styles.trackOn]}>
-            <View style={[styles.thumb, sleepMode && styles.thumbOn]} />
-          </View>
-        </Pressable>
-
         {!deviceReady && (
           <Pressable onPress={() => router.replace('/scan' as Href)} style={({ pressed }) => [styles.scanBtn, pressed && styles.pressed]}>
             <Ionicons name="scan" size={18} color="#080B14" />
@@ -381,15 +361,7 @@ export default function ControlScreen() {
         </View>
 
         {/* Sheet scrollable content */}
-        <ScrollView
-          style={styles.sheetScroll}
-          contentContainerStyle={styles.sheetContent}
-          showsVerticalScrollIndicator={false}
-          scrollEnabled={sheetOpen}
-          scrollEventThrottle={16}
-          onScroll={(e) => { scrollYRef.current = e.nativeEvent.contentOffset.y; }}
-          keyboardShouldPersistTaps="handled"
-        >
+        <View style={[styles.sheetScroll, styles.sheetContent]}>
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>Controls</Text>
             <Text style={styles.sheetSub}>CricTrack v2 · Device {suffix}</Text>
@@ -467,7 +439,7 @@ export default function ControlScreen() {
           )}
 
           <Text style={styles.footer}>Firmware v2.4.1 · Up to date</Text>
-        </ScrollView>
+        </View>
       </Animated.View>
 
     </View>
