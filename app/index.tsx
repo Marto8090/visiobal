@@ -19,10 +19,13 @@ const { width } = Dimensions.get('window');
 const LOADER_WIDTH = 132;
 const LOADER_DOT_SIZE = 12;
 
+const GLOW_SCALE = width / (2 * Math.tan((42 / 2) * (Math.PI / 180)) * 6.2);
+
 export default function IndexScreen() {
   const router = useRouter();
   const progress = useRef(new Animated.Value(0)).current;
   const redirectedRef = useRef(false);
+  const glowY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const duration = 2000 + Math.floor(Math.random() * 2001);
@@ -64,8 +67,8 @@ export default function IndexScreen() {
 
       <View style={styles.container}>
         <View style={styles.hero}>
-          <View style={styles.outerGlow} />
-          <View style={styles.midGlow} />
+          <Animated.View style={[styles.outerGlow, { transform: [{ translateY: glowY }] }]} />
+          <Animated.View style={[styles.midGlow, { transform: [{ translateY: glowY }] }]} />
 
           <View style={styles.canvasWrap}>
             <Suspense fallback={<ActivityIndicator size="large" color="#F05568" />}>
@@ -75,7 +78,11 @@ export default function IndexScreen() {
                 <directionalLight position={[-6, 4, 4]} intensity={1.4} color="#FF8A98" />
                 <directionalLight position={[0, -8, 5]} intensity={0.9} color="#4B1631" />
                 <BackgroundDust />
-                <TexturedVisioball rotationX={0.12} rotationY={0.2} />
+                <TexturedVisioball
+                  rotationX={0.12}
+                  rotationY={0.2}
+                  onHoverOffset={(offset) => glowY.setValue(-offset * GLOW_SCALE)}
+                />
               </Canvas>
             </Suspense>
           </View>

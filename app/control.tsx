@@ -68,22 +68,9 @@ export default function ControlScreen() {
   const ballRotRef = useRef(ballRot);
   const panStartRef = useRef(ballRot);
   const glowY = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    let rafId: number;
-    const startTime = Date.now();
-
-    const tick = () => {
-      const elapsed = (Date.now() - startTime) / 1000;
-      // Exact same formula as TexturedVisioball: Math.sin(time * 1.5) * 0.2
-      // Scaled to screen pixels (~12px) and inverted (3D up = screen negative Y)
-      glowY.setValue(-Math.sin(elapsed * 1.5) * 12);
-      rafId = requestAnimationFrame(tick);
-    };
-
-    rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
-  }, [glowY]);
+  // canvas height / visible world height = pixel-per-unit scale for the hover axis
+  const CANVAS_H = Math.min(width * 0.82, 320);
+  const GLOW_SCALE = CANVAS_H / (2 * Math.tan((42 / 2) * (Math.PI / 180)) * 6.2);
 
   // Bottom inset — how tall the system nav bar is (0 on gesture nav, ~48dp on 3-button nav)
   // We add extra breathing room on top of the raw inset so the peek never sits flush against buttons
@@ -276,11 +263,17 @@ export default function ControlScreen() {
               <directionalLight color="#FF8A98" intensity={1.4} position={[-6, 4, 4]} />
               <directionalLight color="#4B1631" intensity={0.9} position={[0, -8, 5]} />
               <BackgroundDust />
-              <TexturedVisioball rotationX={ballRot.x} rotationY={ballRot.y} />
+              <TexturedVisioball
+                rotationX={ballRot.x}
+                rotationY={ballRot.y}
+                onHoverOffset={(offset) => glowY.setValue(-offset * GLOW_SCALE)}
+              />
             </Canvas>
           </Suspense>
         </View>
       </View>
+
+      <View style={styles.stageSeparator} />
 
       {/* Main scrollable content — padded so sheet peek never covers it */}
       <View style={[styles.content, { paddingBottom: PEEK_HEIGHT + SAFE_BOTTOM + 12 }]}>
@@ -292,7 +285,6 @@ export default function ControlScreen() {
               {deviceReady ? 'Connected · Ready' : 'Disconnected'}
             </Text>
           </View>
-          <Text style={styles.metaText}>{deviceReady ? '79% · BT 5.2' : 'Tap to scan'}</Text>
         </View>
 
         <View style={styles.volHeader}>
@@ -465,9 +457,10 @@ const styles = StyleSheet.create({
   ballStage: { height: Math.min(width * 0.88, 340), alignItems: 'center', justifyContent: 'center' },
   canvasWrap: { width: Math.min(width, 390), height: Math.min(width * 0.82, 320) },
 
+  stageSeparator: { height: 1, backgroundColor: 'rgba(168,85,247,0.18)', marginHorizontal: 20 },
   content: { flex: 1, paddingHorizontal: 20 },
 
-  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, marginBottom: 20 },
   statusChip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(34,197,94,0.08)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(34,197,94,0.25)', paddingHorizontal: 12, paddingVertical: 7 },
   statusChipOff: { backgroundColor: 'rgba(255,193,68,0.08)', borderColor: 'rgba(255,193,68,0.25)' },
   statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#22C55E' },
