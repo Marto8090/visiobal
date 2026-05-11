@@ -397,7 +397,7 @@ export default function ControlScreen() {
             <Tile color="#60A5FA" icon="locate" sub="Radar · GPS"
               title="Locate" onPress={() => { closeSheet(); router.push('/radar' as Href); }} />
             <Tile color="#F472B6" icon="settings-sharp" sub="Alerts · device"
-              title="Settings" onPress={() => setDevPanelVisible(v => !v)} />
+              title="Settings" onPress={() => { closeSheet(); router.push('/settings' as Href); }} />
           </View>
 
           <Pressable
