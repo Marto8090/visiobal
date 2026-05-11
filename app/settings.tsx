@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import Constants from 'expo-constants';
 import type { Href } from 'expo-router';
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import {
+  Alert,
   Platform,
   Pressable,
   SafeAreaView,
@@ -34,6 +34,12 @@ type MenuRowProps = {
 type StaticRowProps = {
   label: string;
   subtitle?: string;
+};
+
+const DEFAULT_SETTINGS = {
+  batteryWarnings: true,
+  connectionAlerts: false,
+  pushNotifications: true,
 };
 
 function Section({ children, title }: { children: ReactNode; title: string }) {
@@ -92,11 +98,30 @@ function StaticRow({ label, subtitle }: StaticRowProps) {
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const appVersion = Constants.expoConfig?.version ?? '1.4.0';
+  const appVersion = '1.4.0';
 
-  const [pushNotifications, setPushNotifications] = useState(true);
-  const [connectionAlerts, setConnectionAlerts] = useState(false);
-  const [batteryWarnings, setBatteryWarnings] = useState(true);
+  const [pushNotifications, setPushNotifications] = useState(DEFAULT_SETTINGS.pushNotifications);
+  const [connectionAlerts, setConnectionAlerts] = useState(DEFAULT_SETTINGS.connectionAlerts);
+  const [batteryWarnings, setBatteryWarnings] = useState(DEFAULT_SETTINGS.batteryWarnings);
+
+  const resetToDefaults = () => {
+    setPushNotifications(DEFAULT_SETTINGS.pushNotifications);
+    setConnectionAlerts(DEFAULT_SETTINGS.connectionAlerts);
+    setBatteryWarnings(DEFAULT_SETTINGS.batteryWarnings);
+
+    Alert.alert('Factory reset complete', 'App preferences have been restored to default mode.');
+  };
+
+  const confirmFactoryReset = () => {
+    Alert.alert(
+      'Factory reset',
+      'This will remove all preferences put in the app and return it to default mode.',
+      [
+        { style: 'cancel', text: 'Cancel' },
+        { onPress: resetToDefaults, style: 'destructive', text: 'Reset' },
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -146,7 +171,12 @@ export default function SettingsScreen() {
             subtitle="v1.4.0 - Up to date"
           />
           <Separator />
-          <MenuRow danger label="Factory reset" subtitle="Erase all settings" />
+          <MenuRow
+            danger
+            label="Factory reset"
+            onPress={confirmFactoryReset}
+            subtitle="Erase all settings"
+          />
         </Section>
 
         <Section title="ABOUT">
