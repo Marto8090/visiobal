@@ -67,6 +67,7 @@ export default function ControlScreen() {
 
   const ballRotRef = useRef(ballRot);
   const panStartRef = useRef(ballRot);
+  const scrollYRef = useRef(0);
   const glowY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -95,18 +96,19 @@ export default function ControlScreen() {
     Animated.spring(sheetY, {
       toValue: 0,
       useNativeDriver: true,
-      bounciness: 4,
-      speed: 14,
+      tension: 58,
+      friction: 13,
     }).start();
   };
 
   const closeSheet = () => {
+    setSheetOpen(false); // unblock background immediately — no dead zone
     Animated.spring(sheetY, {
       toValue: CLOSED_Y,
       useNativeDriver: true,
-      bounciness: 2,
-      speed: 16,
-    }).start(() => setSheetOpen(false));
+      tension: 72,
+      friction: 18,
+    }).start();
   };
 
   // Bounce chevrons when collapsed
@@ -123,12 +125,20 @@ export default function ControlScreen() {
     return () => loop.stop();
   }, [bounceAnim]);
 
-  // Sheet drag gesture — only responds to vertical drag on the handle area
+  // Sheet drag — lives on the whole sheet, scroll-aware
   const dragStartY = useRef(0);
   const sheetDrag = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 5,
+      // Never pre-emptively claim touch start — lets taps reach Pressables
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, g) => {
+        if (Math.abs(g.dy) < 6) return false;
+        const atTop = scrollYRef.current <= 0;
+        const goingDown = g.dy > 0;
+        const sheetIsOpen = ((sheetY as any)._value ?? CLOSED_Y) < 20;
+        // Always capture when sheet is closing/closed; only capture scroll-to-dismiss at top
+        return !sheetIsOpen || (atTop && goingDown);
+      },
       onPanResponderGrant: () => {
         dragStartY.current = (sheetY as any)._value ?? 0;
       },
@@ -138,7 +148,8 @@ export default function ControlScreen() {
       },
       onPanResponderRelease: (_, g) => {
         const cur = (sheetY as any)._value ?? 0;
-        if (g.dy > 30 || cur > CLOSED_Y * 0.45) {
+        // Fast swipe down closes instantly regardless of position
+        if (g.vy > 0.4 || g.dy > 40 || cur > CLOSED_Y * 0.42) {
           closeSheet();
         } else {
           openSheet();
@@ -335,37 +346,38 @@ export default function ControlScreen() {
           Positioned so its bottom edge accounts for the system nav bar.
           The sheet sits ABOVE the nav bar — never underneath it. */}
       <Animated.View
+        {...sheetDrag.panHandlers}
         style={[
           styles.sheet,
           {
-            // Extra bottom padding inside sheet so content clears nav bar
             paddingBottom: SAFE_BOTTOM,
-            // Sheet sits above nav bar
             bottom: navBarHeight,
             height: SHEET_HEIGHT,
           },
           { transform: [{ translateY: sheetY }] },
         ]}
       >
-        {/* Draggable peek strip */}
-        <View {...sheetDrag.panHandlers} style={styles.peekStrip}>
-          {/* Bouncing chevrons — stop bouncing once open */}
-          <Animated.View style={[
-            styles.chevronsWrap,
-            { transform: [{ translateY: sheetOpen ? 0 : bounceAnim }] },
-          ]}>
-            <Ionicons name="chevron-up" size={13} color="rgba(168,85,247,0.25)" style={styles.chevronBot} />
-            <Ionicons name="chevron-up" size={13} color="rgba(168,85,247,0.55)" style={styles.chevronMid} />
-            <Ionicons name="chevron-up" size={13} color="#A855F7" />
-          </Animated.View>
+        {/* Drag zone — visual only, no panHandlers needed here */}
+        <View style={styles.dragZone}>
+          <View style={styles.peekStrip}>
+            {/* Bouncing chevrons — stop bouncing once open */}
+            <Animated.View style={[
+              styles.chevronsWrap,
+              { transform: [{ translateY: sheetOpen ? 0 : bounceAnim }] },
+            ]}>
+              <Ionicons name="chevron-up" size={13} color="rgba(168,85,247,0.25)" style={styles.chevronBot} />
+              <Ionicons name="chevron-up" size={13} color="rgba(168,85,247,0.55)" style={styles.chevronMid} />
+              <Ionicons name="chevron-up" size={13} color="#A855F7" />
+            </Animated.View>
 
-          <Pressable onPress={sheetOpen ? closeSheet : openSheet} style={styles.peekCenter}>
-            <View style={styles.handleBar} />
-            <Text style={styles.peekLabel}>{sheetOpen ? 'Close menu' : 'Quick menu'}</Text>
-          </Pressable>
+            <Pressable onPress={sheetOpen ? closeSheet : openSheet} style={styles.peekCenter}>
+              <View style={styles.handleBar} />
+              <Text style={styles.peekLabel}>{sheetOpen ? 'Close menu' : 'Quick menu'}</Text>
+            </Pressable>
 
-          {/* Subtle indicator dot for open/closed state */}
-          <View style={[styles.peekDot, sheetOpen && styles.peekDotOpen]} />
+            {/* Subtle indicator dot for open/closed state */}
+            <View style={[styles.peekDot, sheetOpen && styles.peekDotOpen]} />
+          </View>
         </View>
 
         {/* Sheet scrollable content */}
@@ -374,6 +386,8 @@ export default function ControlScreen() {
           contentContainerStyle={styles.sheetContent}
           showsVerticalScrollIndicator={false}
           scrollEnabled={sheetOpen}
+          scrollEventThrottle={16}
+          onScroll={(e) => { scrollYRef.current = e.nativeEvent.contentOffset.y; }}
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.sheetHeader}>
@@ -524,7 +538,13 @@ const styles = StyleSheet.create({
     elevation: 28,
   },
 
-  // Peek strip
+  // Large drag zone — the actual touch target (taller than the visual strip)
+  dragZone: {
+    width: '100%',
+    minHeight: 80,
+    justifyContent: 'center',
+  },
+  // Peek strip — visual only, lives inside dragZone
   peekStrip: {
     flexDirection: 'row',
     alignItems: 'center',
