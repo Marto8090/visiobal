@@ -67,6 +67,18 @@ export default function ControlScreen() {
 
   const ballRotRef = useRef(ballRot);
   const panStartRef = useRef(ballRot);
+  const glowY = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowY, { toValue: -12, duration: 2100, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(glowY, { toValue: 12, duration: 2100, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [glowY]);
 
   // Bottom inset — how tall the system nav bar is (0 on gesture nav, ~48dp on 3-button nav)
   // We add extra breathing room on top of the raw inset so the peek never sits flush against buttons
@@ -237,8 +249,8 @@ export default function ControlScreen() {
 
       {/* 3D Ball */}
       <View style={styles.ballStage}>
-        <View style={styles.outerGlow} />
-        <View style={styles.midGlow} />
+        <Animated.View style={[styles.outerGlow, { transform: [{ translateY: glowY }] }]} />
+        <Animated.View style={[styles.midGlow, { transform: [{ translateY: glowY }] }]} />
         <View {...ballPan.panHandlers} style={styles.canvasWrap}>
           <Suspense fallback={<ActivityIndicator color="#F05568" size="large" />}>
             <Canvas camera={{ fov: 42, position: [0, 0, 6.2] }}>
