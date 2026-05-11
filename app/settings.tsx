@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
-import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
+import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import {
@@ -28,6 +28,11 @@ type MenuRowProps = {
   hideChevron?: boolean;
   label: string;
   onPress?: () => void;
+  subtitle?: string;
+};
+
+type StaticRowProps = {
+  label: string;
   subtitle?: string;
 };
 
@@ -74,9 +79,20 @@ function MenuRow({ danger = false, hideChevron = false, label, onPress, subtitle
   );
 }
 
+function StaticRow({ label, subtitle }: StaticRowProps) {
+  return (
+    <View style={styles.row}>
+      <View style={styles.rowText}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        {subtitle ? <Text style={styles.rowSubtitle}>{subtitle}</Text> : null}
+      </View>
+    </View>
+  );
+}
+
 export default function SettingsScreen() {
   const router = useRouter();
-  const appVersion = Constants.expoConfig?.version ?? '1.0.0';
+  const appVersion = Constants.expoConfig?.version ?? '1.4.0';
 
   const [pushNotifications, setPushNotifications] = useState(true);
   const [connectionAlerts, setConnectionAlerts] = useState(false);
@@ -122,9 +138,13 @@ export default function SettingsScreen() {
         </Section>
 
         <Section title="DEVICE">
-          <MenuRow label="Device name" subtitle="VisioBall - Device A4" />
+          <StaticRow label="Device name" subtitle="VisioBall - Device A4" />
           <Separator />
-          <MenuRow label="Firmware" subtitle="v2.4.1 - Up to date" />
+          <MenuRow
+            label="Firmware"
+            onPress={() => router.push('/firmware-history' as Href)}
+            subtitle="v1.4.0 - Up to date"
+          />
           <Separator />
           <MenuRow danger label="Factory reset" subtitle="Erase all settings" />
         </Section>
@@ -132,7 +152,7 @@ export default function SettingsScreen() {
         <Section title="ABOUT">
           <MenuRow label="Privacy policy" onPress={() => router.push('/privacy' as Href)} />
           <Separator />
-          <MenuRow label="Terms of service" />
+          <MenuRow label="Terms of service" onPress={() => router.push('/terms' as Href)} />
           <Separator />
           <MenuRow hideChevron label="App version" subtitle={appVersion} />
         </Section>
