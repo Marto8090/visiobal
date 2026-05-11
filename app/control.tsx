@@ -92,6 +92,9 @@ export default function ControlScreen() {
   const CLOSED_Y = SHEET_HEIGHT - PEEK_HEIGHT - SAFE_BOTTOM;
 
   const sheetY = useRef(new Animated.Value(CLOSED_Y)).current;
+  const sheetPositionRef = useRef(CLOSED_Y);
+  const closedYRef = useRef(CLOSED_Y);
+  const sheetAnimationIdRef = useRef(0);
   const chevronRotate = useRef(new Animated.Value(0)).current;
   const chevronScale = useRef(new Animated.Value(1)).current;
   const chevronSpin = chevronRotate.interpolate({
@@ -104,22 +107,64 @@ export default function ControlScreen() {
     Animated.spring(chevronScale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }),
   ]);
 
+  useEffect(() => {
+    const listenerId = sheetY.addListener(({ value }) => {
+      sheetPositionRef.current = value;
+    });
+
+    return () => {
+      sheetY.removeListener(listenerId);
+    };
+  }, [sheetY]);
+
+  useEffect(() => {
+    closedYRef.current = CLOSED_Y;
+
+    if (!sheetOpen) {
+      sheetPositionRef.current = CLOSED_Y;
+      sheetY.setValue(CLOSED_Y);
+    }
+  }, [CLOSED_Y, sheetOpen, sheetY]);
+
   const openSheet = () => {
+    const animationId = ++sheetAnimationIdRef.current;
+
+    sheetY.stopAnimation((value) => {
+      sheetPositionRef.current = value;
+    });
     setSheetOpen(true);
     Animated.parallel([
-      Animated.spring(sheetY, { toValue: 0, useNativeDriver: true, tension: 58, friction: 13 }),
+      Animated.spring(sheetY, { toValue: 0, useNativeDriver: false, tension: 58, friction: 13 }),
       Animated.spring(chevronRotate, { toValue: 1, useNativeDriver: true, tension: 130, friction: 8 }),
       pulseThenSettle(),
-    ]).start();
+    ]).start(({ finished }) => {
+      if (!finished || animationId !== sheetAnimationIdRef.current) {
+        return;
+      }
+
+      sheetPositionRef.current = 0;
+    });
   };
 
   const closeSheet = () => {
-    setSheetOpen(false);
+    const animationId = ++sheetAnimationIdRef.current;
+    const targetY = closedYRef.current;
+
+    sheetY.stopAnimation((value) => {
+      sheetPositionRef.current = value;
+    });
     Animated.parallel([
-      Animated.spring(sheetY, { toValue: CLOSED_Y, useNativeDriver: true, tension: 72, friction: 18 }),
+      Animated.spring(sheetY, { toValue: targetY, useNativeDriver: false, tension: 72, friction: 18 }),
       Animated.spring(chevronRotate, { toValue: 0, useNativeDriver: true, tension: 130, friction: 8 }),
       pulseThenSettle(),
-    ]).start();
+    ]).start(({ finished }) => {
+      if (!finished || animationId !== sheetAnimationIdRef.current) {
+        return;
+      }
+
+      sheetPositionRef.current = targetY;
+      setSheetOpen(false);
+    });
   };
 
   // Bounce chevrons when collapsed
@@ -144,16 +189,30 @@ export default function ControlScreen() {
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) >= 6,
       onPanResponderGrant: () => {
-        dragStartY.current = (sheetY as any)._value ?? 0;
+        ++sheetAnimationIdRef.current;
+        dragStartY.current = sheetPositionRef.current;
+
+        sheetY.stopAnimation((value) => {
+          sheetPositionRef.current = value;
+          dragStartY.current = value;
+        });
       },
       onPanResponderMove: (_, g) => {
-        const next = clamp(dragStartY.current + g.dy, 0, CLOSED_Y);
+        const next = clamp(dragStartY.current + g.dy, 0, closedYRef.current);
+        sheetPositionRef.current = next;
         sheetY.setValue(next);
       },
       onPanResponderRelease: (_, g) => {
-        const cur = (sheetY as any)._value ?? 0;
+        const cur = sheetPositionRef.current;
         // Fast swipe down closes instantly regardless of position
-        if (g.vy > 0.4 || g.dy > 40 || cur > CLOSED_Y * 0.42) {
+        if (g.vy > 0.4 || g.dy > 40 || cur > closedYRef.current * 0.42) {
+          closeSheet();
+        } else {
+          openSheet();
+        }
+      },
+      onPanResponderTerminate: () => {
+        if (sheetPositionRef.current > closedYRef.current * 0.42) {
           closeSheet();
         } else {
           openSheet();
@@ -539,7 +598,7 @@ const styles = StyleSheet.create({
   scanBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#22C55E', borderRadius: 14, paddingVertical: 14, marginTop: 16 },
   scanBtnText: { color: '#080B14', fontSize: 15, fontWeight: '800' },
 
-  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', zIndex: 10 },
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'transparent', zIndex: 10 },
 
   // Sheet — bottom is set dynamically in JSX to sit above nav bar
   sheet: {
