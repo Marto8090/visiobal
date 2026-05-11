@@ -6,9 +6,10 @@ import type { Points } from 'three';
 type TexturedVisioballProps = {
   rotationX?: number;
   rotationY?: number;
+  onHoverOffset?: (offset: number) => void;
 };
 
-export function TexturedVisioball({ rotationX = 0, rotationY = 0 }: TexturedVisioballProps) {
+export function TexturedVisioball({ rotationX = 0, rotationY = 0, onHoverOffset }: TexturedVisioballProps) {
   const coreRef = useRef<Mesh>(null);
   const textureShellRef = useRef<Mesh>(null);
   const shadowRef = useRef<Mesh>(null);
@@ -34,6 +35,8 @@ export function TexturedVisioball({ rotationX = 0, rotationY = 0 }: TexturedVisi
     }
 
     const hoverOffset = Math.sin(time * 1.5) * 0.2;
+
+    onHoverOffset?.(hoverOffset);
 
     if (coreRef.current) {
       coreRef.current.position.y = hoverOffset;
