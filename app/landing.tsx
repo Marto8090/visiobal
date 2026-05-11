@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FrequencySlider } from '@/src/components/FrequencySlider';
 import { BackgroundDust, TexturedVisioball } from '@/src/components/VisioballModel';
+import { configureThreeNativeRenderer } from '@/src/utils/configureThreeNativeRenderer';
 
 const { width } = Dimensions.get('window');
 const VOLUME_STEPS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
@@ -69,7 +70,7 @@ export default function LandingPage() {
             <View style={styles.midGlow} />
             <View style={styles.canvasWrap}>
               <Suspense fallback={<ActivityIndicator size="large" color="#F05568" />}>
-                <Canvas camera={{ position: [0, 0, 5.8], fov: 40 }}>
+                <Canvas camera={{ position: [0, 0, 5.8], fov: 40 }} onCreated={configureThreeNativeRenderer}>
                   <ambientLight intensity={0.8} color="#ffffff" />
                   <directionalLight position={[6, 8, 8]} intensity={2.2} color="#ffffff" />
                   <directionalLight position={[-6, 4, 4]} intensity={1.4} color="#FF8A98" />

@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TexturedVisioball } from '@/src/components/VisioballModel';
+import { configureThreeNativeRenderer } from '@/src/utils/configureThreeNativeRenderer';
 
 const { width, height } = Dimensions.get('window');
 
@@ -120,7 +121,7 @@ export default function RadarPage() {
         {/* 3D Ball */}
         <View style={styles.ballWrap}>
           <Suspense fallback={null}>
-            <Canvas camera={{ position: [0, 0, 8], fov: 40 }}>
+            <Canvas camera={{ position: [0, 0, 8], fov: 40 }} onCreated={configureThreeNativeRenderer}>
               <ambientLight intensity={0.7} color="#ffffff" />
               <directionalLight position={[8, 8, 8]} intensity={2.6} color="#ffffff" />
               <directionalLight position={[-4, -2, 4]} intensity={1.0} color="#FF6B6B" />

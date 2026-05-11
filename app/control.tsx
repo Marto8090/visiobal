@@ -25,6 +25,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { FrequencySlider } from '@/src/components/FrequencySlider';
 import { BackgroundDust, TexturedVisioball } from '@/src/components/VisioballModel';
+import { configureThreeNativeRenderer } from '@/src/utils/configureThreeNativeRenderer';
 import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 
 const { width, height } = Dimensions.get('window');
@@ -267,7 +268,7 @@ export default function ControlScreen() {
         <Animated.View style={[styles.midGlow, { transform: [{ translateY: glowY }] }]} />
         <View {...ballPan.panHandlers} style={styles.canvasWrap}>
           <Suspense fallback={<ActivityIndicator color="#F05568" size="large" />}>
-            <Canvas camera={{ fov: 42, position: [0, 0, 6.2] }}>
+            <Canvas camera={{ fov: 42, position: [0, 0, 6.2] }} onCreated={configureThreeNativeRenderer}>
               <ambientLight color="#ffffff" intensity={0.8} />
               <directionalLight color="#ffffff" intensity={2.2} position={[6, 8, 8]} />
               <directionalLight color="#FF8A98" intensity={1.4} position={[-6, 4, 4]} />

@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BackgroundDust, TexturedVisioball } from '@/src/components/VisioballModel';
+import { configureThreeNativeRenderer } from '@/src/utils/configureThreeNativeRenderer';
 
 const { width } = Dimensions.get('window');
 const LOADER_WIDTH = 132;
@@ -72,7 +73,7 @@ export default function IndexScreen() {
 
           <View style={styles.canvasWrap}>
             <Suspense fallback={<ActivityIndicator size="large" color="#F05568" />}>
-              <Canvas camera={{ position: [0, 0, 6.2], fov: 42 }}>
+              <Canvas camera={{ position: [0, 0, 6.2], fov: 42 }} onCreated={configureThreeNativeRenderer}>
                 <ambientLight intensity={0.8} color="#ffffff" />
                 <directionalLight position={[6, 8, 8]} intensity={2.2} color="#ffffff" />
                 <directionalLight position={[-6, 4, 4]} intensity={1.4} color="#FF8A98" />
