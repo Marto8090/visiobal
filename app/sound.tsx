@@ -1,13 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
+  Animated,
   FlatList,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+
+import { FrequencySlider } from '@/src/components/FrequencySlider';
 
 const TRACKS = [
   { id: '1', title: 'Lora - Deep Focus', duration: '4:05', genre: 'Ambient' },
@@ -17,12 +20,25 @@ const TRACKS = [
   { id: '5', title: 'Ambient Pulse', duration: '4:33', genre: 'Electronic' },
 ];
 
+const VOLUME_STEPS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+
 export default function SoundPage() {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState(TRACKS[0].id);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(50);
+
+  const playScale = useRef(new Animated.Value(1)).current;
+  const skipBackScale = useRef(new Animated.Value(1)).current;
+  const skipFwdScale = useRef(new Animated.Value(1)).current;
 
   const currentTrack = TRACKS.find(t => t.id === selectedId)!;
+
+  const pressIn = (scale: Animated.Value) =>
+    Animated.spring(scale, { toValue: 1.22, useNativeDriver: true, tension: 300, friction: 8 }).start();
+
+  const pressOut = (scale: Animated.Value) =>
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }).start();
 
   return (
     <View style={styles.container}>
@@ -42,7 +58,7 @@ export default function SoundPage() {
         {/* Art */}
         <View style={styles.artWrap}>
           <View style={styles.artInner}>
-            <Ionicons name="musical-notes" size={40} color="#DC2626" />
+            <Ionicons name="musical-notes" size={40} color="#A855F7" />
           </View>
           <View style={styles.artGlow} />
         </View>
@@ -64,23 +80,69 @@ export default function SoundPage() {
 
         {/* Controls */}
         <View style={styles.controls}>
-          <Pressable style={({ pressed }) => [styles.ctrlBtn, pressed && styles.pressed]}>
-            <Ionicons name="play-skip-back" size={22} color="#8892A8" />
-          </Pressable>
-          <Pressable
-            onPress={() => setIsPlaying(v => !v)}
-            style={({ pressed }) => [styles.playBtn, pressed && styles.pressed]}
-          >
-            <Ionicons
-              name={isPlaying ? 'pause' : 'play'}
-              size={30}
-              color="#080B14"
-              style={!isPlaying && { marginLeft: 3 }}
-            />
-          </Pressable>
-          <Pressable style={({ pressed }) => [styles.ctrlBtn, pressed && styles.pressed]}>
-            <Ionicons name="play-skip-forward" size={22} color="#8892A8" />
-          </Pressable>
+          <Animated.View style={{ transform: [{ scale: skipBackScale }] }}>
+            <Pressable
+              style={styles.ctrlBtn}
+              onPressIn={() => pressIn(skipBackScale)}
+              onPressOut={() => pressOut(skipBackScale)}
+            >
+              <Ionicons name="play-skip-back" size={22} color="#60A5FA" />
+            </Pressable>
+          </Animated.View>
+
+          <Animated.View style={{ transform: [{ scale: playScale }] }}>
+            <Pressable
+              onPress={() => setIsPlaying(v => !v)}
+              onPressIn={() => pressIn(playScale)}
+              onPressOut={() => pressOut(playScale)}
+              style={styles.playBtn}
+            >
+              <Ionicons
+                name={isPlaying ? 'pause' : 'play'}
+                size={30}
+                color="#F9FAFB"
+                style={!isPlaying && { marginLeft: 3 }}
+              />
+            </Pressable>
+          </Animated.View>
+
+          <Animated.View style={{ transform: [{ scale: skipFwdScale }] }}>
+            <Pressable
+              style={styles.ctrlBtn}
+              onPressIn={() => pressIn(skipFwdScale)}
+              onPressOut={() => pressOut(skipFwdScale)}
+            >
+              <Ionicons name="play-skip-forward" size={22} color="#F472B6" />
+            </Pressable>
+          </Animated.View>
+        </View>
+
+        {/* Volume */}
+        <View style={styles.volumeSection}>
+          <View style={styles.volumeHeader}>
+            <Text style={styles.volumeLabel}>VOLUME</Text>
+            <Text style={styles.volumeValue}>{volume}</Text>
+          </View>
+          <FrequencySlider
+            value={volume}
+            minimumValue={0}
+            maximumValue={100}
+            step={10}
+            onValueChange={setVolume}
+            onSlidingComplete={setVolume}
+          />
+          <View style={styles.ticksRow}>
+            {VOLUME_STEPS.map(step => (
+              <View key={step} style={styles.tickItem}>
+                <View style={[styles.tickDot, volume >= step && styles.tickDotActive]} />
+                {step % 20 === 0 && (
+                  <Text style={[styles.tickLabel, volume >= step && styles.tickLabelActive]}>
+                    {step}
+                  </Text>
+                )}
+              </View>
+            ))}
+          </View>
         </View>
       </View>
 
@@ -100,7 +162,7 @@ export default function SoundPage() {
             >
               <View style={[styles.trackNum, active && styles.trackNumActive]}>
                 {active
-                  ? <Ionicons name="volume-high" size={14} color="#DC2626" />
+                  ? <Ionicons name="volume-high" size={14} color="#A855F7" />
                   : <Text style={styles.trackNumText}>{index + 1}</Text>
                 }
               </View>
@@ -124,34 +186,58 @@ const styles = StyleSheet.create({
   backBtn: { width: 40, height: 40, backgroundColor: '#0F1220', borderRadius: 13, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { color: '#F1F5FF', fontSize: 13, fontWeight: '800', letterSpacing: 3 },
 
-  playerCard: { backgroundColor: '#0F1220', marginHorizontal: 20, borderRadius: 24, padding: 22, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', marginBottom: 24 },
+  playerCard: { backgroundColor: '#0F1220', marginHorizontal: 20, borderRadius: 24, padding: 22, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(168,85,247,0.15)', marginBottom: 24 },
 
   artWrap: { width: 80, height: 80, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
-  artInner: { width: 80, height: 80, borderRadius: 20, backgroundColor: '#161A2E', borderWidth: 1, borderColor: 'rgba(220,38,38,0.25)', alignItems: 'center', justifyContent: 'center', zIndex: 2 },
-  artGlow: { position: 'absolute', width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(220,38,38,0.12)' },
+  artInner: { width: 80, height: 80, borderRadius: 20, backgroundColor: '#161A2E', borderWidth: 1, borderColor: 'rgba(168,85,247,0.28)', alignItems: 'center', justifyContent: 'center', zIndex: 2 },
+  artGlow: { position: 'absolute', width: 96, height: 96, borderRadius: 48, backgroundColor: 'rgba(168,85,247,0.1)' },
 
   trackTitle: { color: '#F1F5FF', fontSize: 18, fontWeight: '900', marginBottom: 4, textAlign: 'center' },
   trackMeta: { color: '#4A5268', fontSize: 13, fontWeight: '600', marginBottom: 20 },
 
   progressWrap: { width: '100%', marginBottom: 22 },
   progressTrack: { width: '100%', height: 4, backgroundColor: '#161A2E', borderRadius: 2, marginBottom: 8, overflow: 'visible' },
-  progressFill: { width: '35%', height: '100%', backgroundColor: '#DC2626', borderRadius: 2 },
-  progressKnob: { position: 'absolute', left: '35%', top: -4, width: 12, height: 12, borderRadius: 6, backgroundColor: '#DC2626', marginLeft: -6 },
+  progressFill: { width: '35%', height: '100%', backgroundColor: '#A855F7', borderRadius: 2 },
+  progressKnob: { position: 'absolute', left: '35%', top: -4, width: 12, height: 12, borderRadius: 6, backgroundColor: '#A855F7', marginLeft: -6 },
   timeRow: { flexDirection: 'row', justifyContent: 'space-between' },
   timeText: { color: '#4A5268', fontSize: 11, fontWeight: '600' },
 
   controls: { flexDirection: 'row', alignItems: 'center', gap: 24 },
   ctrlBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  playBtn: { width: 64, height: 64, borderRadius: 20, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center', shadowColor: '#DC2626', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 14, elevation: 10 },
+  playBtn: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: '#A855F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#A855F7',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 18,
+    elevation: 10,
+  },
+
+  volumeSection: { width: '100%', marginTop: 22, borderTopWidth: 1, borderTopColor: 'rgba(168,85,247,0.14)', paddingTop: 18 },
+  volumeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 },
+  volumeLabel: { color: '#4A5268', fontSize: 10, fontWeight: '800', letterSpacing: 2 },
+  volumeValue: { color: '#A855F7', fontSize: 13, fontWeight: '900' },
+
+  ticksRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 6 },
+  tickItem: { alignItems: 'center', gap: 4 },
+  tickDot: { width: 3, height: 6, borderRadius: 1.5, backgroundColor: '#1E2740' },
+  tickDotActive: { backgroundColor: '#A855F7' },
+  tickLabel: { color: '#2A3050', fontSize: 8, fontWeight: '700' },
+  tickLabelActive: { color: '#A855F7' },
 
   listLabel: { color: '#2A3050', fontSize: 10, fontWeight: '800', letterSpacing: 2, paddingHorizontal: 24, marginBottom: 10 },
   listContent: { paddingHorizontal: 20, paddingBottom: 40 },
 
   trackRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0F1220', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', gap: 12 },
-  trackRowActive: { borderColor: 'rgba(220,38,38,0.25)', backgroundColor: '#130D0D' },
+  trackRowActive: { borderColor: 'rgba(168,85,247,0.28)', backgroundColor: '#11102A' },
 
   trackNum: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#161A2E', alignItems: 'center', justifyContent: 'center' },
-  trackNumActive: { backgroundColor: 'rgba(220,38,38,0.15)' },
+  trackNumActive: { backgroundColor: 'rgba(168,85,247,0.15)' },
   trackNumText: { color: '#4A5268', fontSize: 12, fontWeight: '700' },
 
   trackInfo: { flex: 1, gap: 2 },
