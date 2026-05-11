@@ -94,25 +94,34 @@ export default function ControlScreen() {
   const CLOSED_Y = SHEET_HEIGHT - PEEK_HEIGHT - SAFE_BOTTOM;
 
   const sheetY = useRef(new Animated.Value(CLOSED_Y)).current;
+  const chevronRotate = useRef(new Animated.Value(0)).current;
+  const chevronScale = useRef(new Animated.Value(1)).current;
+  const chevronSpin = chevronRotate.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '180deg'],
+  });
+
+  const pulseThenSettle = () => Animated.sequence([
+    Animated.spring(chevronScale, { toValue: 1.35, useNativeDriver: true, tension: 260, friction: 6 }),
+    Animated.spring(chevronScale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }),
+  ]);
 
   const openSheet = () => {
     setSheetOpen(true);
-    Animated.spring(sheetY, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 58,
-      friction: 13,
-    }).start();
+    Animated.parallel([
+      Animated.spring(sheetY, { toValue: 0, useNativeDriver: true, tension: 58, friction: 13 }),
+      Animated.spring(chevronRotate, { toValue: 1, useNativeDriver: true, tension: 130, friction: 8 }),
+      pulseThenSettle(),
+    ]).start();
   };
 
   const closeSheet = () => {
-    setSheetOpen(false); // unblock background immediately — no dead zone
-    Animated.spring(sheetY, {
-      toValue: CLOSED_Y,
-      useNativeDriver: true,
-      tension: 72,
-      friction: 18,
-    }).start();
+    setSheetOpen(false);
+    Animated.parallel([
+      Animated.spring(sheetY, { toValue: CLOSED_Y, useNativeDriver: true, tension: 72, friction: 18 }),
+      Animated.spring(chevronRotate, { toValue: 0, useNativeDriver: true, tension: 130, friction: 8 }),
+      pulseThenSettle(),
+    ]).start();
   };
 
   // Bounce chevrons when collapsed
@@ -340,14 +349,15 @@ export default function ControlScreen() {
         {/* Drag zone — visual only, no panHandlers needed here */}
         <View style={styles.dragZone}>
           <View style={styles.peekStrip}>
-            {/* Bouncing chevrons — stop bouncing once open */}
             <Animated.View style={[
-              styles.chevronsWrap,
-              { transform: [{ translateY: sheetOpen ? 0 : bounceAnim }] },
+              styles.chevronContainer,
+              { transform: [
+                { translateY: sheetOpen ? 0 : bounceAnim },
+                { rotate: chevronSpin },
+                { scale: chevronScale },
+              ]},
             ]}>
-              <Ionicons name="chevron-up" size={13} color="rgba(168,85,247,0.25)" style={styles.chevronBot} />
-              <Ionicons name="chevron-up" size={13} color="rgba(168,85,247,0.55)" style={styles.chevronMid} />
-              <Ionicons name="chevron-up" size={13} color="#A855F7" />
+              <Ionicons name="chevron-up" size={20} color="#A855F7" />
             </Animated.View>
 
             <Pressable onPress={sheetOpen ? closeSheet : openSheet} style={styles.peekCenter}>
@@ -500,8 +510,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#0D1628',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    borderTopWidth: 1,
-    borderColor: 'rgba(168,85,247,0.18)',
+    borderTopWidth: 2,
+    borderTopColor: 'rgba(168,85,247,0.75)',
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(168,85,247,0.28)',
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(168,85,247,0.28)',
     zIndex: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -8 },
@@ -524,9 +538,17 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     gap: 10,
   },
-  chevronsWrap: { alignItems: 'center', width: 20 },
-  chevronBot: { marginBottom: -7 },
-  chevronMid: { marginBottom: -7 },
+  chevronContainer: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#A855F7',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 10,
+    elevation: 4,
+  },
   peekCenter: { flex: 1, alignItems: 'center', gap: 6 },
   handleBar: { width: 44, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.18)' },
   peekLabel: { color: '#8A9BBF', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
