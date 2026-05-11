@@ -21,8 +21,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LinearGradient } from 'expo-linear-gradient';
+
 import { FrequencySlider } from '@/src/components/FrequencySlider';
-import { TexturedVisioball } from '@/src/components/VisioballModel';
+import { BackgroundDust, TexturedVisioball } from '@/src/components/VisioballModel';
 import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 
 const { width, height } = Dimensions.get('window');
@@ -227,19 +229,27 @@ export default function ControlScreen() {
 
   return (
     <View style={styles.screen}>
+      <LinearGradient
+        colors={['#142240', '#0F1A30', '#091121']}
+        locations={[0, 0.5, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+
       {/* Push status bar content down on Android */}
       {Platform.OS === 'android' && <View style={{ height: StatusBar.currentHeight ?? 24 }} />}
 
-      <View style={styles.topGlow} />
-
       {/* 3D Ball */}
       <View style={styles.ballStage}>
+        <View style={styles.outerGlow} />
+        <View style={styles.midGlow} />
         <View {...ballPan.panHandlers} style={styles.canvasWrap}>
-          <Suspense fallback={<ActivityIndicator color="#DC2626" size="large" />}>
-            <Canvas camera={{ fov: 44, position: [0, 0, 6] }}>
-              <ambientLight color="#ffffff" intensity={0.5} />
-              <directionalLight color="#FF8888" intensity={2.2} position={[4, 5, 5]} />
-              <directionalLight color="#FF4444" intensity={0.8} position={[-5, -2, 3]} />
+          <Suspense fallback={<ActivityIndicator color="#F05568" size="large" />}>
+            <Canvas camera={{ fov: 42, position: [0, 0, 6.2] }}>
+              <ambientLight color="#ffffff" intensity={0.8} />
+              <directionalLight color="#ffffff" intensity={2.2} position={[6, 8, 8]} />
+              <directionalLight color="#FF8A98" intensity={1.4} position={[-6, 4, 4]} />
+              <directionalLight color="#4B1631" intensity={0.9} position={[0, -8, 5]} />
+              <BackgroundDust />
               <TexturedVisioball rotationX={ballRot.x} rotationY={ballRot.y} />
             </Canvas>
           </Suspense>
@@ -439,11 +449,13 @@ export default function ControlScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#080B14' },
-  topGlow: { position: 'absolute', top: 30, left: '50%', marginLeft: -140, width: 280, height: 280, borderRadius: 140, backgroundColor: 'rgba(220,38,38,0.07)' },
+  screen: { flex: 1, backgroundColor: '#091121' },
 
-  ballStage: { height: 300, alignItems: 'center', justifyContent: 'center' },
-  canvasWrap: { width: Math.min(width, 390), height: 280 },
+  outerGlow: { position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: 'rgba(93,24,54,0.24)' },
+  midGlow: { position: 'absolute', width: 240, height: 240, borderRadius: 120, backgroundColor: 'rgba(143,32,62,0.22)' },
+
+  ballStage: { height: Math.min(width * 0.88, 340), alignItems: 'center', justifyContent: 'center' },
+  canvasWrap: { width: Math.min(width, 390), height: Math.min(width * 0.82, 320) },
 
   content: { flex: 1, paddingHorizontal: 20 },
 
