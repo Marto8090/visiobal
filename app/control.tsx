@@ -28,6 +28,7 @@ import { BackgroundDust, TexturedVisioball } from '@/src/components/VisioballMod
 import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 
 const { width, height } = Dimensions.get('window');
+const VOLUME_STEPS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 
 // Peek strip height (above the safe area bottom inset)
 const PEEK_HEIGHT = 48;
@@ -64,6 +65,15 @@ export default function ControlScreen() {
   const [lastCmd, setLastCmd] = useState<string | null>(null);
   const [ballRot, setBallRot] = useState({ x: 0, y: 0 });
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  const playScale = useRef(new Animated.Value(1)).current;
+  const skipBackScale = useRef(new Animated.Value(1)).current;
+  const skipFwdScale = useRef(new Animated.Value(1)).current;
+
+  const pressIn = (scale: Animated.Value) =>
+    Animated.spring(scale, { toValue: 1.22, useNativeDriver: true, tension: 300, friction: 8 }).start();
+  const pressOut = (scale: Animated.Value) =>
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }).start();
 
   const ballRotRef = useRef(ballRot);
   const panStartRef = useRef(ballRot);
@@ -289,27 +299,55 @@ export default function ControlScreen() {
 
         <View style={styles.volHeader}>
           <Text style={styles.sectionLabel}>VOLUME</Text>
-          <Text style={styles.volVal}>{volume}%</Text>
+          <Text style={styles.volVal}>{volume}</Text>
         </View>
-        <FrequencySlider minimumValue={0} maximumValue={100} step={1} value={volume} onValueChange={setVolume} />
+        <FrequencySlider minimumValue={0} maximumValue={100} step={10} value={volume} onValueChange={setVolume} />
+        <View style={styles.ticksRow}>
+          {VOLUME_STEPS.map(step => (
+            <View key={step} style={styles.tickItem}>
+              <View style={[styles.tickDot, volume >= step && styles.tickDotActive]} />
+              {step % 20 === 0 && (
+                <Text style={[styles.tickLabel, volume >= step && styles.tickLabelActive]}>{step}</Text>
+              )}
+            </View>
+          ))}
+        </View>
 
         <View style={styles.transport}>
-          <Pressable style={({ pressed }) => [styles.arrowBtn, pressed && styles.pressed]}>
-            <Ionicons name="arrow-back" size={24} color="#F1F5FF" />
-          </Pressable>
-          <Pressable
-            disabled={sending}
-            onPress={() => void handlePlay()}
-            style={({ pressed }) => [styles.playBtn, !deviceReady && styles.playBtnOff, pressed && styles.pressed]}
-          >
-            {sending
-              ? <ActivityIndicator color="#080B14" />
-              : <Ionicons name={isPlaying ? 'pause' : 'play'} size={32} color={deviceReady ? '#080B14' : '#F1F5FF'} style={!isPlaying && styles.playIconNudge} />
-            }
-          </Pressable>
-          <Pressable style={({ pressed }) => [styles.arrowBtn, pressed && styles.pressed]}>
-            <Ionicons name="arrow-forward" size={24} color="#F1F5FF" />
-          </Pressable>
+          <Animated.View style={{ transform: [{ scale: skipBackScale }] }}>
+            <Pressable
+              style={styles.ctrlSkipBtn}
+              onPressIn={() => pressIn(skipBackScale)}
+              onPressOut={() => pressOut(skipBackScale)}
+            >
+              <Ionicons name="play-skip-back" size={22} color="#60A5FA" />
+            </Pressable>
+          </Animated.View>
+
+          <Animated.View style={{ transform: [{ scale: playScale }] }}>
+            <Pressable
+              disabled={sending}
+              onPress={() => void handlePlay()}
+              onPressIn={() => pressIn(playScale)}
+              onPressOut={() => pressOut(playScale)}
+              style={[styles.playBtn, !deviceReady && styles.playBtnOff]}
+            >
+              {sending
+                ? <ActivityIndicator color="#F9FAFB" />
+                : <Ionicons name={isPlaying ? 'pause' : 'play'} size={28} color="#F9FAFB" style={!isPlaying && styles.playIconNudge} />
+              }
+            </Pressable>
+          </Animated.View>
+
+          <Animated.View style={{ transform: [{ scale: skipFwdScale }] }}>
+            <Pressable
+              style={styles.ctrlSkipBtn}
+              onPressIn={() => pressIn(skipFwdScale)}
+              onPressOut={() => pressOut(skipFwdScale)}
+            >
+              <Ionicons name="play-skip-forward" size={22} color="#F472B6" />
+            </Pressable>
+          </Animated.View>
         </View>
 
         {!deviceReady && (
@@ -471,11 +509,18 @@ const styles = StyleSheet.create({
 
   sectionLabel: { color: '#4A5268', fontSize: 10, fontWeight: '800', letterSpacing: 2 },
   volHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  volVal: { color: '#8892A8', fontSize: 12, fontWeight: '700' },
+  volVal: { color: '#A855F7', fontSize: 12, fontWeight: '900' },
 
-  transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginTop: 22 },
-  arrowBtn: { width: 52, height: 52, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', alignItems: 'center', justifyContent: 'center' },
-  playBtn: { width: 68, height: 68, borderRadius: 22, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center', shadowColor: '#DC2626', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 10 },
+  ticksRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 4 },
+  tickItem: { alignItems: 'center', gap: 3 },
+  tickDot: { width: 3, height: 5, borderRadius: 1.5, backgroundColor: '#1E2740' },
+  tickDotActive: { backgroundColor: '#A855F7' },
+  tickLabel: { color: '#2A3050', fontSize: 8, fontWeight: '700' },
+  tickLabelActive: { color: '#A855F7' },
+
+  transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 28, marginTop: 20 },
+  ctrlSkipBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  playBtn: { width: 58, height: 58, borderRadius: 18, backgroundColor: '#A855F7', alignItems: 'center', justifyContent: 'center', shadowColor: '#A855F7', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.5, shadowRadius: 16, elevation: 10 },
   playBtnOff: { backgroundColor: '#1C2238', shadowOpacity: 0 },
   playIconNudge: { marginLeft: 3 },
 

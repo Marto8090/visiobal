@@ -11,6 +11,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TexturedVisioball } from '@/src/components/VisioballModel';
 
@@ -52,7 +53,7 @@ export default function RadarPage() {
   });
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
 
       {/* Header */}
       <View style={styles.header}>
@@ -116,14 +117,14 @@ export default function RadarPage() {
         </Pressable>
       </View>
 
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#080B14', alignItems: 'center' },
 
-  header: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 4 },
+  header: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 4 },
   backBtn: { width: 40, height: 40, backgroundColor: '#0F1220', borderRadius: 13, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', alignItems: 'center', justifyContent: 'center' },
   headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerTitle: { color: '#F1F5FF', fontSize: 20, fontWeight: '800' },

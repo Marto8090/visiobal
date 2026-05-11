@@ -85,77 +85,70 @@ export default function LandingPage() {
           <View style={styles.bottom}>
             <View style={styles.bottomCard}>
 
-              {/* Music player */}
-              <View style={styles.musicPlayer}>
-                <View style={styles.musicControls}>
-                  <Animated.View style={{ transform: [{ scale: skipBackScale }] }}>
-                    <Pressable
-                      style={styles.ctrlBtn}
-                      onPressIn={() => pressIn(skipBackScale)}
-                      onPressOut={() => pressOut(skipBackScale)}
-                    >
-                      <Ionicons name="play-skip-back" size={20} color="#60A5FA" />
-                    </Pressable>
-                  </Animated.View>
-
-                  <Animated.View style={{ transform: [{ scale: playScale }] }}>
-                    <Pressable
-                      onPress={() => setIsPlaying(v => !v)}
-                      onPressIn={() => pressIn(playScale)}
-                      onPressOut={() => pressOut(playScale)}
-                      style={styles.playBtn}
-                    >
-                      <Ionicons
-                        name={isPlaying ? 'pause' : 'play'}
-                        size={24}
-                        color="#F9FAFB"
-                        style={!isPlaying && { marginLeft: 3 }}
-                      />
-                    </Pressable>
-                  </Animated.View>
-
-                  <Animated.View style={{ transform: [{ scale: skipFwdScale }] }}>
-                    <Pressable
-                      style={styles.ctrlBtn}
-                      onPressIn={() => pressIn(skipFwdScale)}
-                      onPressOut={() => pressOut(skipFwdScale)}
-                    >
-                      <Ionicons name="play-skip-forward" size={20} color="#F472B6" />
-                    </Pressable>
-                  </Animated.View>
-                </View>
-
-                {/* Volume slider */}
-                <View style={styles.volumeRow}>
-                  <Text style={styles.volumeLabel}>VOL</Text>
-                  <View style={styles.volumeSliderWrap}>
-                    <FrequencySlider
-                      value={volume}
-                      minimumValue={0}
-                      maximumValue={100}
-                      step={10}
-                      onValueChange={setVolume}
-                      onSlidingComplete={setVolume}
-                    />
-                    <View style={styles.ticksRow}>
-                      {VOLUME_STEPS.map(step => (
-                        <View key={step} style={styles.tickItem}>
-                          <View style={[styles.tickDot, volume >= step && styles.tickDotActive]} />
-                          {step % 20 === 0 && (
-                            <Text style={[styles.tickLabel, volume >= step && styles.tickLabelActive]}>
-                              {step}
-                            </Text>
-                          )}
-                        </View>
-                      ))}
-                    </View>
-                  </View>
+              {/* Music controls — identical design to sound.tsx */}
+              <View style={styles.musicControls}>
+                <Animated.View style={{ transform: [{ scale: skipBackScale }] }}>
                   <Pressable
-                    style={({ pressed }) => [styles.soundLibBtn, pressed && styles.pressed]}
-                    onPress={() => router.push('/sound')}
+                    style={styles.ctrlBtn}
+                    onPressIn={() => pressIn(skipBackScale)}
+                    onPressOut={() => pressOut(skipBackScale)}
                   >
-                    <Ionicons name="musical-notes" size={16} color="#A855F7" />
+                    <Ionicons name="play-skip-back" size={22} color="#60A5FA" />
                   </Pressable>
+                </Animated.View>
+
+                <Animated.View style={{ transform: [{ scale: playScale }] }}>
+                  <Pressable
+                    onPress={() => setIsPlaying(v => !v)}
+                    onPressIn={() => pressIn(playScale)}
+                    onPressOut={() => pressOut(playScale)}
+                    style={styles.playBtn}
+                  >
+                    <Ionicons
+                      name={isPlaying ? 'pause' : 'play'}
+                      size={28}
+                      color="#F9FAFB"
+                      style={!isPlaying && { marginLeft: 3 }}
+                    />
+                  </Pressable>
+                </Animated.View>
+
+                <Animated.View style={{ transform: [{ scale: skipFwdScale }] }}>
+                  <Pressable
+                    style={styles.ctrlBtn}
+                    onPressIn={() => pressIn(skipFwdScale)}
+                    onPressOut={() => pressOut(skipFwdScale)}
+                  >
+                    <Ionicons name="play-skip-forward" size={22} color="#F472B6" />
+                  </Pressable>
+                </Animated.View>
+              </View>
+
+              {/* Volume — identical to sound.tsx volumeSection */}
+              <View style={styles.volumeSection}>
+                <View style={styles.volumeHeader}>
+                  <Text style={styles.volumeLabel}>VOLUME</Text>
+                  <Text style={styles.volumeValue}>{volume}</Text>
+                </View>
+                <FrequencySlider
+                  value={volume}
+                  minimumValue={0}
+                  maximumValue={100}
+                  step={10}
+                  onValueChange={setVolume}
+                  onSlidingComplete={setVolume}
+                />
+                <View style={styles.ticksRow}>
+                  {VOLUME_STEPS.map(step => (
+                    <View key={step} style={styles.tickItem}>
+                      <View style={[styles.tickDot, volume >= step && styles.tickDotActive]} />
+                      {step % 20 === 0 && (
+                        <Text style={[styles.tickLabel, volume >= step && styles.tickLabelActive]}>
+                          {step}
+                        </Text>
+                      )}
+                    </View>
+                  ))}
                 </View>
               </View>
 
@@ -303,50 +296,45 @@ const styles = StyleSheet.create({
     gap: 14,
   },
 
-  musicPlayer: { gap: 10 },
   musicControls: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 24,
+    gap: 28,
   },
-  ctrlBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  ctrlBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   playBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 58,
+    height: 58,
+    borderRadius: 18,
     backgroundColor: '#A855F7',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#A855F7',
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.5,
-    shadowRadius: 14,
-    elevation: 8,
+    shadowRadius: 16,
+    elevation: 10,
   },
 
-  volumeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  volumeLabel: { color: '#4A5268', fontSize: 9, fontWeight: '800', letterSpacing: 1.5, width: 24 },
-  volumeSliderWrap: { flex: 1 },
-  soundLibBtn: {
-    width: 34,
-    height: 34,
-    backgroundColor: 'rgba(168,85,247,0.1)',
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: 'rgba(168,85,247,0.22)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  volumeSection: {
+    width: '100%',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(168,85,247,0.14)',
+    paddingTop: 12,
   },
+  volumeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 },
+  volumeLabel: { color: '#4A5268', fontSize: 10, fontWeight: '800', letterSpacing: 2 },
+  volumeValue: { color: '#A855F7', fontSize: 12, fontWeight: '900' },
 
-  ticksRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 2 },
-  tickItem: { alignItems: 'center', gap: 2 },
-  tickDot: { width: 2, height: 4, borderRadius: 1, backgroundColor: '#1E2740' },
+  ticksRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 4 },
+  tickItem: { alignItems: 'center', gap: 3 },
+  tickDot: { width: 3, height: 5, borderRadius: 1.5, backgroundColor: '#1E2740' },
   tickDotActive: { backgroundColor: '#A855F7' },
-  tickLabel: { color: '#2A3050', fontSize: 7, fontWeight: '700' },
+  tickLabel: { color: '#2A3050', fontSize: 8, fontWeight: '700' },
   tickLabelActive: { color: '#A855F7' },
 
-  cardDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginHorizontal: -4 },
+  cardDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.07)' },
 
   actionRow: { flexDirection: 'row', gap: 12 },
   primaryBtn: {
