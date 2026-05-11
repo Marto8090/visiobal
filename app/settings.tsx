@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
+import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import {
@@ -26,6 +27,7 @@ type MenuRowProps = {
   danger?: boolean;
   hideChevron?: boolean;
   label: string;
+  onPress?: () => void;
   subtitle?: string;
 };
 
@@ -60,9 +62,9 @@ function ToggleRow({ label, onValueChange, subtitle, value }: ToggleRowProps) {
   );
 }
 
-function MenuRow({ danger = false, hideChevron = false, label, subtitle }: MenuRowProps) {
+function MenuRow({ danger = false, hideChevron = false, label, onPress, subtitle }: MenuRowProps) {
   return (
-    <Pressable style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
       <View style={styles.rowText}>
         <Text style={[styles.rowLabel, danger && styles.dangerText]}>{label}</Text>
         {subtitle ? <Text style={styles.rowSubtitle}>{subtitle}</Text> : null}
@@ -128,7 +130,7 @@ export default function SettingsScreen() {
         </Section>
 
         <Section title="ABOUT">
-          <MenuRow label="Privacy policy" />
+          <MenuRow label="Privacy policy" onPress={() => router.push('/privacy' as Href)} />
           <Separator />
           <MenuRow label="Terms of service" />
           <Separator />

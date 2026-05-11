@@ -11,6 +11,7 @@ export default function RootLayout() {
         <Stack.Screen name="landing" options={{ headerShown: false }} />
         <Stack.Screen name="sound" options={{ headerShown: false }} />
         <Stack.Screen name="settings" options={{ headerShown: false }} />
+        <Stack.Screen name="privacy" options={{ headerShown: false }} />
       </Stack>
     </SafeAreaProvider>
   );
