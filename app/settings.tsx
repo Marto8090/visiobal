@@ -63,10 +63,10 @@ function ToggleRow({ label, onValueChange, subtitle, value }: ToggleRowProps) {
         <Text style={styles.rowSubtitle}>{subtitle}</Text>
       </View>
       <Switch
-        ios_backgroundColor="#1C2540"
+        ios_backgroundColor="#161A2E"
         onValueChange={onValueChange}
         thumbColor="#FFFFFF"
-        trackColor={{ false: '#1C2540', true: '#22C55E' }}
+        trackColor={{ false: '#161A2E', true: '#F472B6' }}
         value={value}
       />
     </View>
@@ -75,12 +75,15 @@ function ToggleRow({ label, onValueChange, subtitle, value }: ToggleRowProps) {
 
 function MenuRow({ danger = false, hideChevron = false, label, onPress, subtitle }: MenuRowProps) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.row, danger && styles.dangerRow, pressed && styles.pressed]}
+    >
       <View style={styles.rowText}>
         <Text style={[styles.rowLabel, danger && styles.dangerText]}>{label}</Text>
         {subtitle ? <Text style={styles.rowSubtitle}>{subtitle}</Text> : null}
       </View>
-      {!hideChevron && <Ionicons color="#748098" name="chevron-forward" size={18} />}
+      {!hideChevron && <Ionicons color="#7A8CAE" name="chevron-forward" size={18} />}
     </Pressable>
   );
 }
@@ -132,7 +135,7 @@ export default function SettingsScreen() {
           onPress={() => router.back()}
           style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
         >
-          <Ionicons color="#F8FAFC" name="arrow-back" size={22} />
+          <Ionicons color="#F472B6" name="arrow-back" size={22} />
         </Pressable>
         <Text style={styles.headerTitle}>App Settings</Text>
         <View style={styles.headerSpacer} />
@@ -194,7 +197,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#080B14',
+    backgroundColor: '#091121',
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0,
   },
   header: {
@@ -211,7 +214,7 @@ const styles = StyleSheet.create({
     width: 44,
   },
   headerTitle: {
-    color: '#F8FAFC',
+    color: '#F4F7FF',
     flex: 1,
     fontSize: 18,
     fontWeight: '800',
@@ -228,7 +231,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   sectionTitle: {
-    color: '#748098',
+    color: '#7A8CAE',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.7,
@@ -236,8 +239,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   card: {
-    backgroundColor: '#121827',
-    borderRadius: 12,
+    backgroundColor: '#0F1220',
+    borderColor: 'rgba(244,114,182,0.22)',
+    borderRadius: 18,
+    borderWidth: 1,
     overflow: 'hidden',
   },
   row: {
@@ -247,28 +252,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
+  dangerRow: {
+    backgroundColor: 'rgba(244,114,182,0.08)',
+  },
   rowText: {
     flex: 1,
     paddingRight: 12,
   },
   rowLabel: {
-    color: '#F8FAFC',
+    color: '#F4F7FF',
     fontSize: 15,
     fontWeight: '600',
   },
   rowSubtitle: {
-    color: '#748098',
+    color: '#7A8CAE',
     fontSize: 12,
     fontWeight: '500',
     marginTop: 4,
   },
   separator: {
-    backgroundColor: '#1E293B',
+    backgroundColor: 'rgba(244,114,182,0.14)',
     height: 1,
     marginLeft: 14,
   },
   dangerText: {
-    color: '#EF4444',
+    color: '#F472B6',
   },
   pressed: {
     opacity: 0.72,

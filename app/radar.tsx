@@ -24,6 +24,7 @@ export default function RadarPage() {
   const ring1 = useRef(new Animated.Value(0)).current;
   const ring2 = useRef(new Animated.Value(0)).current;
   const ring3 = useRef(new Animated.Value(0)).current;
+  const dotBounce = useRef(new Animated.Value(0)).current;
 
   const makePulse = (anim: Animated.Value, delay: number) =>
     Animated.loop(
@@ -39,18 +40,49 @@ export default function RadarPage() {
       ])
     );
 
+  const makeDotBounce = (anim: Animated.Value) =>
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }),
+        Animated.timing(anim, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ])
+    );
+
   useEffect(() => {
     const a1 = makePulse(ring1, 0);
     const a2 = makePulse(ring2, 700);
     const a3 = makePulse(ring3, 1400);
+    const dots = makeDotBounce(dotBounce);
+
     a1.start(); a2.start(); a3.start();
-    return () => { a1.stop(); a2.stop(); a3.stop(); };
-  }, [ring1, ring2, ring3]);
+    dots.start();
+
+    return () => {
+      a1.stop(); a2.stop(); a3.stop();
+      dots.stop();
+    };
+  }, [dotBounce, ring1, ring2, ring3]);
 
   const ringStyle = (anim: Animated.Value) => ({
     transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 2.2] }) }],
     opacity: anim.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0.6, 0.2, 0] }),
   });
+
+  const dotStyle = (start: number) => {
+    return {
+      transform: [{
+        translateY: dotBounce.interpolate({
+          inputRange: [0, start, start + 0.14, start + 0.28, 1],
+          outputRange: [0, 0, -6, 0, 0],
+        }),
+      }],
+    };
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -63,9 +95,9 @@ export default function RadarPage() {
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Searching</Text>
           <View style={styles.searchingDots}>
-            <View style={styles.dot} />
-            <View style={[styles.dot, styles.dotMid]} />
-            <View style={[styles.dot, styles.dotLow]} />
+            <Animated.View style={[styles.dot, dotStyle(0.08)]} />
+            <Animated.View style={[styles.dot, styles.dotMid, dotStyle(0.24)]} />
+            <Animated.View style={[styles.dot, styles.dotLow, dotStyle(0.40)]} />
           </View>
         </View>
         <View style={{ width: 40 }} />

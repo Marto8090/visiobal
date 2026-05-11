@@ -32,7 +32,7 @@ export default function TermsScreen() {
           onPress={() => router.back()}
           style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
         >
-          <Ionicons color="#F8FAFC" name="arrow-back" size={22} />
+          <Ionicons color="#F472B6" name="arrow-back" size={22} />
         </Pressable>
         <Text style={styles.headerTitle}>Terms of Service</Text>
         <View style={styles.headerSpacer} />
@@ -75,7 +75,7 @@ export default function TermsScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#080B14',
+    backgroundColor: '#091121',
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0,
   },
   header: {
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     width: 44,
   },
   headerTitle: {
-    color: '#F8FAFC',
+    color: '#F4F7FF',
     flex: 1,
     fontSize: 18,
     fontWeight: '800',
@@ -106,37 +106,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   card: {
-    backgroundColor: '#121827',
-    borderRadius: 12,
+    backgroundColor: '#0F1220',
+    borderColor: 'rgba(244,114,182,0.22)',
+    borderRadius: 18,
+    borderWidth: 1,
     padding: 16,
   },
   updated: {
-    color: '#748098',
+    color: '#F472B6',
     fontSize: 12,
     fontWeight: '700',
     marginBottom: 12,
   },
   intro: {
-    color: '#D8DEE9',
+    color: '#F4F7FF',
     fontSize: 14,
     fontWeight: '500',
     lineHeight: 21,
     marginBottom: 18,
   },
   section: {
-    borderTopColor: '#1E293B',
+    borderTopColor: 'rgba(244,114,182,0.14)',
     borderTopWidth: 1,
     marginTop: 16,
     paddingTop: 16,
   },
   sectionTitle: {
-    color: '#F8FAFC',
+    color: '#F4F7FF',
     fontSize: 15,
     fontWeight: '800',
     marginBottom: 8,
   },
   body: {
-    color: '#9AA6BC',
+    color: '#7A8CAE',
     fontSize: 13,
     fontWeight: '500',
     lineHeight: 20,

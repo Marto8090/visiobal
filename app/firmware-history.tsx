@@ -95,7 +95,7 @@ export default function FirmwareHistoryScreen() {
           onPress={() => router.back()}
           style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
         >
-          <Ionicons color="#F8FAFC" name="arrow-back" size={22} />
+          <Ionicons color="#F472B6" name="arrow-back" size={22} />
         </Pressable>
         <Text style={styles.headerTitle}>Firmware History</Text>
         <View style={styles.headerSpacer} />
@@ -116,7 +116,7 @@ export default function FirmwareHistoryScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#080B14',
+    backgroundColor: '#091121',
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0,
   },
   header: {
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     width: 44,
   },
   headerTitle: {
-    color: '#F8FAFC',
+    color: '#F4F7FF',
     flex: 1,
     fontSize: 18,
     fontWeight: '800',
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   intro: {
-    color: '#9AA6BC',
+    color: '#7A8CAE',
     fontSize: 13,
     fontWeight: '600',
     lineHeight: 20,
@@ -155,8 +155,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   card: {
-    backgroundColor: '#121827',
-    borderRadius: 12,
+    backgroundColor: '#0F1220',
+    borderColor: 'rgba(244,114,182,0.22)',
+    borderRadius: 18,
+    borderWidth: 1,
     marginBottom: 14,
     padding: 16,
   },
@@ -168,18 +170,18 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   version: {
-    color: '#22C55E',
+    color: '#F472B6',
     fontSize: 13,
     fontWeight: '900',
     marginBottom: 4,
   },
   title: {
-    color: '#F8FAFC',
+    color: '#F4F7FF',
     fontSize: 16,
     fontWeight: '800',
   },
   date: {
-    color: '#748098',
+    color: '#7A8CAE',
     fontSize: 12,
     fontWeight: '700',
     marginTop: 1,
@@ -191,14 +193,14 @@ const styles = StyleSheet.create({
     marginTop: 9,
   },
   dot: {
-    backgroundColor: '#60A5FA',
+    backgroundColor: '#F472B6',
     borderRadius: 3,
     height: 6,
     marginTop: 7,
     width: 6,
   },
   changeText: {
-    color: '#9AA6BC',
+    color: '#7A8CAE',
     flex: 1,
     fontSize: 13,
     fontWeight: '500',
