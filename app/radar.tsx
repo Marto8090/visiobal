@@ -30,7 +30,7 @@ function makeStyles(theme: ThemeColors) {
     },
     backBtn: {
       width: 40, height: 40, backgroundColor: theme.card, borderRadius: 13,
-      borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center',
+      alignItems: 'center', justifyContent: 'center',
     },
     headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     headerTitle: { color: theme.text, fontSize: 20, fontWeight: '800' },

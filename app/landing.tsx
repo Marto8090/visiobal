@@ -49,7 +49,7 @@ function makeStyles(theme: ThemeColors) {
     tagline: { color: theme.textMuted, fontSize: 11, fontWeight: '600', letterSpacing: 1, marginTop: 3 },
     powerBtn: {
       width: 44, height: 44, backgroundColor: theme.card, borderRadius: 14,
-      borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center',
+      alignItems: 'center', justifyContent: 'center',
     },
     hero: { alignItems: 'center', justifyContent: 'center' },
     canvasWrap: { width, height: width },
@@ -89,7 +89,6 @@ function makeStyles(theme: ThemeColors) {
     secondaryBtn: {
       width: 56, backgroundColor: theme.card, borderRadius: 20,
       justifyContent: 'center', alignItems: 'center',
-      borderWidth: 1, borderColor: theme.border,
     },
     overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.55)' },
     sheet: {
@@ -103,7 +102,7 @@ function makeStyles(theme: ThemeColors) {
     sheetTitle: { color: theme.text, fontSize: 22, fontWeight: '900' },
     closeBtn: {
       width: 34, height: 34, backgroundColor: theme.card, borderRadius: 11,
-      alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.border,
+      alignItems: 'center', justifyContent: 'center',
     },
     stepperRow: { flexDirection: 'row', gap: 12, marginBottom: 22 },
     stepperCard: {

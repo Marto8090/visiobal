@@ -36,7 +36,7 @@ const SHEET_HEIGHT = height * 0.60;
 
 function clamp(v: number, lo: number, hi: number) { return Math.min(Math.max(v, lo), hi); }
 
-function makeStyles(theme: ThemeColors) {
+function makeStyles(theme: ThemeColors, isDark: boolean) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: theme.bgDeep },
     ballStage: { height: Math.min(width * 0.88, 340), alignItems: 'center', justifyContent: 'center' },
@@ -45,11 +45,11 @@ function makeStyles(theme: ThemeColors) {
     content: { flex: 1, paddingHorizontal: 20 },
     statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, marginBottom: 20 },
     statusChip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(34,197,94,0.08)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(34,197,94,0.25)', paddingHorizontal: 12, paddingVertical: 7 },
-    statusChipOff: { backgroundColor: 'rgba(255,193,68,0.08)', borderColor: 'rgba(255,193,68,0.25)' },
+    statusChipOff: { backgroundColor: isDark ? 'rgba(255,193,68,0.08)' : 'rgba(100,120,200,0.08)', borderColor: isDark ? 'rgba(255,193,68,0.25)' : 'rgba(100,120,200,0.22)' },
     statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#22C55E' },
-    statusDotOff: { backgroundColor: '#F59E0B' },
+    statusDotOff: { backgroundColor: isDark ? '#F59E0B' : '#6B80CC' },
     statusText: { color: '#22C55E', fontSize: 12, fontWeight: '800' },
-    statusTextOff: { color: '#F59E0B' },
+    statusTextOff: { color: isDark ? '#F59E0B' : '#5A6FA0' },
     sectionLabel: { color: theme.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 2 },
     volHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
     volVal: { color: '#A855F7', fontSize: 12, fontWeight: '900' },
@@ -62,7 +62,7 @@ function makeStyles(theme: ThemeColors) {
     transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 28, marginTop: 20 },
     ctrlSkipBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
     playBtn: { width: 58, height: 58, borderRadius: 18, backgroundColor: '#A855F7', alignItems: 'center', justifyContent: 'center', shadowColor: '#A855F7', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.5, shadowRadius: 16, elevation: 10 },
-    playBtnOff: { backgroundColor: theme.card, shadowOpacity: 0 },
+    playBtnOff: { backgroundColor: theme.bgDeep, shadowOpacity: 0 },
     playIconNudge: { marginLeft: 3 },
     scanBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#22C55E', borderRadius: 14, paddingVertical: 14, marginTop: 16 },
     scanBtnText: { color: '#080B14', fontSize: 15, fontWeight: '800' },
@@ -79,11 +79,11 @@ function makeStyles(theme: ThemeColors) {
     },
     dragZone: { width: '100%', minHeight: 80, justifyContent: 'center' },
     peekStrip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, gap: 10 },
-    chevronContainer: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', shadowColor: '#A855F7', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 10, elevation: 4 },
+    chevronContainer: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', shadowColor: '#A855F7', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 10 },
     peekCenter: { flex: 1, alignItems: 'center', gap: 6 },
     handleBar: { width: 44, height: 4, borderRadius: 2, backgroundColor: theme.handleBar },
     peekLabel: { color: theme.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-    peekDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.card },
+    peekDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.bgDeep },
     peekDotOpen: { backgroundColor: '#A855F7' },
     sheetScroll: { flex: 1 },
     sheetContent: { paddingHorizontal: 18, paddingBottom: 20 },
@@ -114,7 +114,7 @@ function makeStyles(theme: ThemeColors) {
     },
     sheetSleepText: { color: theme.text, fontSize: 15, fontWeight: '800' },
     sheetSleepSub: { color: theme.textMuted, fontSize: 12, fontWeight: '500', marginTop: 2 },
-    track: { width: 48, height: 28, borderRadius: 14, backgroundColor: theme.border, padding: 3 },
+    track: { width: 48, height: 28, borderRadius: 14, backgroundColor: theme.tickInactive, padding: 3 },
     trackOn: { backgroundColor: '#A855F7' },
     thumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: theme.textSubtle },
     thumbOn: { backgroundColor: '#fff', transform: [{ translateX: 20 }] },
@@ -160,7 +160,7 @@ export default function ControlScreen() {
   const insets = useSafeAreaInsets();
   const { isDark, theme } = useTheme();
   const { t } = useI18n();
-  const styles = useMemo(() => makeStyles(theme), [theme]);
+  const styles = useMemo(() => makeStyles(theme, isDark), [theme, isDark]);
   const { canSendCommands, connectedDevice, disconnectFromBall, isConnected, sendCommandToBall } = useBluetoothSession();
 
   const [commandDraft, setCommandDraft] = useState('STATUS?');
