@@ -1,17 +1,38 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useMemo } from 'react';
 import {
-  Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-function TermsSection({ body, title }: { body: string; title: string }) {
+import { useI18n } from '@/src/context/I18nContext';
+import { ThemeColors, useTheme } from '@/src/context/ThemeContext';
+
+function makeStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    safeArea: { flex: 1, backgroundColor: theme.bg },
+    header: { alignItems: 'center', flexDirection: 'row', paddingBottom: 14, paddingHorizontal: 8, paddingTop: 8 },
+    backButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
+    headerTitle: { color: theme.text, flex: 1, fontSize: 18, fontWeight: '800', textAlign: 'center' },
+    headerSpacer: { width: 44 },
+    content: { paddingBottom: 28, paddingHorizontal: 16 },
+    card: { backgroundColor: theme.card, borderColor: theme.borderAccent, borderRadius: 18, borderWidth: 1, padding: 16 },
+    updated: { color: '#F472B6', fontSize: 12, fontWeight: '700', marginBottom: 12 },
+    intro: { color: theme.text, fontSize: 14, fontWeight: '500', lineHeight: 21, marginBottom: 18 },
+    section: { borderTopColor: theme.separator, borderTopWidth: 1, paddingTop: 16, marginTop: 16 },
+    sectionTitle: { color: theme.text, fontSize: 15, fontWeight: '800', marginBottom: 8 },
+    body: { color: theme.textMuted, fontSize: 13, fontWeight: '500', lineHeight: 20 },
+    pressed: { opacity: 0.72 },
+  });
+}
+
+function TermsSection({ body, styles, title }: { body: string; styles: ReturnType<typeof makeStyles>; title: string }) {
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -22,10 +43,13 @@ function TermsSection({ body, title }: { body: string; title: string }) {
 
 export default function TermsScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const { t } = useI18n();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle={theme.statusBarStyle} />
       <View style={styles.header}>
         <Pressable
           accessibilityLabel="Go back"
@@ -34,7 +58,7 @@ export default function TermsScreen() {
         >
           <Ionicons color="#F472B6" name="arrow-back" size={22} />
         </Pressable>
-        <Text style={styles.headerTitle}>Terms of Service</Text>
+        <Text style={styles.headerTitle}>{t('termsOfService')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -46,23 +70,23 @@ export default function TermsScreen() {
             for testing and demonstration, not for production use.
           </Text>
 
-          <TermsSection
+          <TermsSection styles={styles}
             title="Prototype use"
             body="VisioBall is provided as a prototype for learning, testing, and project demonstration. Features may change, be incomplete, or behave differently while development continues."
           />
-          <TermsSection
+          <TermsSection styles={styles}
             title="Device control"
             body="The app can send commands to a connected BLE ball device. Use it only with hardware you own or are allowed to test, and keep the device in a safe area while testing lights, sounds, or movement-related features."
           />
-          <TermsSection
+          <TermsSection styles={styles}
             title="No warranty"
             body="The prototype is provided as is. It may contain bugs, connection issues, or unfinished settings. The project team does not guarantee that every feature will work on every phone or ESP32 build."
           />
-          <TermsSection
+          <TermsSection styles={styles}
             title="User responsibility"
             body="You are responsible for how you use the app and connected hardware. Do not use the prototype in situations where a failed connection, wrong command, or unexpected behavior could cause damage or injury."
           />
-          <TermsSection
+          <TermsSection styles={styles}
             title="Future updates"
             body="If the app becomes a real product or adds accounts, cloud services, payments, or public distribution, these terms should be reviewed and updated before release."
           />
@@ -71,79 +95,3 @@ export default function TermsScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#091121',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0,
-  },
-  header: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    paddingBottom: 14,
-    paddingHorizontal: 8,
-    paddingTop: 8,
-  },
-  backButton: {
-    alignItems: 'center',
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  headerTitle: {
-    color: '#F4F7FF',
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  headerSpacer: {
-    width: 44,
-  },
-  content: {
-    paddingBottom: 28,
-    paddingHorizontal: 4,
-  },
-  card: {
-    backgroundColor: '#0F1220',
-    borderColor: 'rgba(244,114,182,0.22)',
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 16,
-  },
-  updated: {
-    color: '#F472B6',
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  intro: {
-    color: '#F4F7FF',
-    fontSize: 14,
-    fontWeight: '500',
-    lineHeight: 21,
-    marginBottom: 18,
-  },
-  section: {
-    borderTopColor: 'rgba(244,114,182,0.14)',
-    borderTopWidth: 1,
-    marginTop: 16,
-    paddingTop: 16,
-  },
-  sectionTitle: {
-    color: '#F4F7FF',
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 8,
-  },
-  body: {
-    color: '#7A8CAE',
-    fontSize: 13,
-    fontWeight: '500',
-    lineHeight: 20,
-  },
-  pressed: {
-    opacity: 0.72,
-  },
-});

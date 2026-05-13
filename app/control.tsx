@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Canvas } from '@react-three/fiber/native';
 import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,7 +12,6 @@ import {
   PanResponder,
   Platform,
   Pressable,
-
   StatusBar,
   StyleSheet,
   Text,
@@ -25,21 +24,126 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { FrequencySlider } from '@/src/components/FrequencySlider';
 import { BackgroundDust, TexturedVisioball } from '@/src/components/VisioballModel';
+import { useI18n } from '@/src/context/I18nContext';
+import { ThemeColors, useTheme } from '@/src/context/ThemeContext';
 import { configureThreeNativeRenderer } from '@/src/utils/configureThreeNativeRenderer';
 import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 
 const { width, height } = Dimensions.get('window');
 const VOLUME_STEPS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-
-// Peek strip height (above the safe area bottom inset)
 const PEEK_HEIGHT = 48;
-// Full expanded sheet height (from bottom of screen)
 const SHEET_HEIGHT = height * 0.60;
 
 function clamp(v: number, lo: number, hi: number) { return Math.min(Math.max(v, lo), hi); }
 
-type TileProps = { color: string; icon: keyof typeof Ionicons.glyphMap; onPress: () => void; sub: string; title: string };
-function Tile({ color, icon, onPress, sub, title }: TileProps) {
+function makeStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.bgDeep },
+    ballStage: { height: Math.min(width * 0.88, 340), alignItems: 'center', justifyContent: 'center' },
+    canvasWrap: { width: Math.min(width, 390), height: Math.min(width * 0.82, 320) },
+    stageSeparator: { height: 1, backgroundColor: 'rgba(168,85,247,0.18)', marginHorizontal: 20 },
+    content: { flex: 1, paddingHorizontal: 20 },
+    statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, marginBottom: 20 },
+    statusChip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(34,197,94,0.08)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(34,197,94,0.25)', paddingHorizontal: 12, paddingVertical: 7 },
+    statusChipOff: { backgroundColor: 'rgba(255,193,68,0.08)', borderColor: 'rgba(255,193,68,0.25)' },
+    statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#22C55E' },
+    statusDotOff: { backgroundColor: '#F59E0B' },
+    statusText: { color: '#22C55E', fontSize: 12, fontWeight: '800' },
+    statusTextOff: { color: '#F59E0B' },
+    sectionLabel: { color: theme.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 2 },
+    volHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+    volVal: { color: '#A855F7', fontSize: 12, fontWeight: '900' },
+    ticksRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 4 },
+    tickItem: { alignItems: 'center', gap: 3 },
+    tickDot: { width: 3, height: 5, borderRadius: 1.5, backgroundColor: theme.tickInactive },
+    tickDotActive: { backgroundColor: '#A855F7' },
+    tickLabel: { color: theme.tickLabel, fontSize: 8, fontWeight: '700' },
+    tickLabelActive: { color: '#A855F7' },
+    transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 28, marginTop: 20 },
+    ctrlSkipBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+    playBtn: { width: 58, height: 58, borderRadius: 18, backgroundColor: '#A855F7', alignItems: 'center', justifyContent: 'center', shadowColor: '#A855F7', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.5, shadowRadius: 16, elevation: 10 },
+    playBtnOff: { backgroundColor: theme.card, shadowOpacity: 0 },
+    playIconNudge: { marginLeft: 3 },
+    scanBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#22C55E', borderRadius: 14, paddingVertical: 14, marginTop: 16 },
+    scanBtnText: { color: '#080B14', fontSize: 15, fontWeight: '800' },
+    backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'transparent', zIndex: 10 },
+    sheet: {
+      position: 'absolute', left: 0, right: 0,
+      backgroundColor: theme.cardAlt,
+      borderTopLeftRadius: 30, borderTopRightRadius: 30,
+      borderTopWidth: 2, borderTopColor: 'rgba(168,85,247,0.75)',
+      borderLeftWidth: 1, borderLeftColor: 'rgba(168,85,247,0.28)',
+      borderRightWidth: 1, borderRightColor: 'rgba(168,85,247,0.28)',
+      zIndex: 20,
+      shadowColor: '#000', shadowOffset: { width: 0, height: -8 }, shadowOpacity: 0.3, shadowRadius: 24, elevation: 28,
+    },
+    dragZone: { width: '100%', minHeight: 80, justifyContent: 'center' },
+    peekStrip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, gap: 10 },
+    chevronContainer: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', shadowColor: '#A855F7', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 10, elevation: 4 },
+    peekCenter: { flex: 1, alignItems: 'center', gap: 6 },
+    handleBar: { width: 44, height: 4, borderRadius: 2, backgroundColor: theme.handleBar },
+    peekLabel: { color: theme.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+    peekDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.card },
+    peekDotOpen: { backgroundColor: '#A855F7' },
+    sheetScroll: { flex: 1 },
+    sheetContent: { paddingHorizontal: 18, paddingBottom: 20 },
+    sheetHeader: { marginBottom: 18 },
+    sheetTitle: { color: theme.text, fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
+    sheetSub: { color: theme.textMuted, fontSize: 13, fontWeight: '500', marginTop: 4 },
+    deviceCard: {
+      flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card,
+      borderRadius: 18, paddingHorizontal: 14, paddingVertical: 13, marginBottom: 18,
+      borderWidth: 1, borderColor: theme.border,
+    },
+    deviceBall: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    deviceBallLine: { width: 48, height: 1, backgroundColor: 'rgba(255,255,255,0.3)', transform: [{ rotate: '6deg' }] },
+    deviceCardText: { flex: 1, marginLeft: 13 },
+    deviceCardTitle: { color: theme.text, fontSize: 16, fontWeight: '800' },
+    deviceCardSub: { color: theme.textMuted, fontSize: 12, fontWeight: '500', marginTop: 2 },
+    deviceStatus: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#22C55E' },
+    deviceStatusOff: { backgroundColor: '#F59E0B' },
+    tilesGrid: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+    tile: { flex: 1, backgroundColor: theme.card, borderRadius: 20, padding: 14, paddingBottom: 16, borderWidth: 1, gap: 12 },
+    tileIconWrap: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    tileTitle: { color: theme.text, fontSize: 14, fontWeight: '800' },
+    tileSub: { color: theme.textMuted, fontSize: 11, fontWeight: '500' },
+    sheetSleepRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      backgroundColor: theme.card, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16,
+      marginBottom: 4, borderWidth: 1, borderColor: theme.border,
+    },
+    sheetSleepText: { color: theme.text, fontSize: 15, fontWeight: '800' },
+    sheetSleepSub: { color: theme.textMuted, fontSize: 12, fontWeight: '500', marginTop: 2 },
+    track: { width: 48, height: 28, borderRadius: 14, backgroundColor: theme.border, padding: 3 },
+    trackOn: { backgroundColor: '#A855F7' },
+    thumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: theme.textSubtle },
+    thumbOn: { backgroundColor: '#fff', transform: [{ translateX: 20 }] },
+    devPanel: { backgroundColor: theme.card, borderRadius: 18, padding: 14, marginTop: 8, borderWidth: 1, borderColor: theme.border },
+    devActions: { flexDirection: 'row', gap: 10, marginBottom: 4 },
+    devBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.bgDeep, borderRadius: 14, borderWidth: 1, borderColor: theme.border, paddingVertical: 12 },
+    devBtnDisabled: { opacity: 0.4 },
+    devBtnText: { color: theme.text, fontSize: 13, fontWeight: '700' },
+    disabledPressable: { opacity: 0.55 },
+    devLabel: { color: theme.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 14, marginBottom: 8 },
+    cmdRow: { flexDirection: 'row', gap: 10 },
+    cmdInput: { flex: 1, backgroundColor: theme.bgDeep, borderRadius: 12, borderWidth: 1, borderColor: theme.border, color: theme.text, fontSize: 14, fontWeight: '600', paddingHorizontal: 14, paddingVertical: 11 },
+    sendBtn: { width: 48, backgroundColor: '#A855F7', borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    sendBtnDisabled: { opacity: 0.4 },
+    lastCmd: { color: '#A855F7', fontSize: 12, fontWeight: '600', marginTop: 10 },
+    footer: { color: theme.textSubtle, fontSize: 12, fontWeight: '600', textAlign: 'center', marginTop: 20 },
+    pressed: { opacity: 0.75, transform: [{ scale: 0.97 }] },
+  });
+}
+
+type TileProps = {
+  color: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+  sub: string;
+  styles: ReturnType<typeof makeStyles>;
+  title: string;
+};
+function Tile({ color, icon, onPress, sub, styles, title }: TileProps) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.tile, { borderColor: `${color}50` }, pressed && styles.pressed]}>
       <View style={[styles.tileIconWrap, { backgroundColor: `${color}22` }]}>
@@ -54,6 +158,9 @@ function Tile({ color, icon, onPress, sub, title }: TileProps) {
 export default function ControlScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { isDark, theme } = useTheme();
+  const { t } = useI18n();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const { canSendCommands, connectedDevice, disconnectFromBall, isConnected, sendCommandToBall } = useBluetoothSession();
 
   const [commandDraft, setCommandDraft] = useState('STATUS?');
@@ -79,16 +186,11 @@ export default function ControlScreen() {
   const ballRotRef = useRef(ballRot);
   const panStartRef = useRef(ballRot);
   const glowY = useRef(new Animated.Value(0)).current;
-  // canvas height / visible world height = pixel-per-unit scale for the hover axis
   const CANVAS_H = Math.min(width * 0.82, 320);
   const GLOW_SCALE = CANVAS_H / (2 * Math.tan((42 / 2) * (Math.PI / 180)) * 6.2);
 
-  // Bottom inset — how tall the system nav bar is (0 on gesture nav, ~48dp on 3-button nav)
-  // We add extra breathing room on top of the raw inset so the peek never sits flush against buttons
   const navBarHeight = insets.bottom;
-  const SAFE_BOTTOM = navBarHeight + 16; // 16px breathing room above nav bar
-
-  // Sheet travel distance: closed = show PEEK_HEIGHT above safe bottom
+  const SAFE_BOTTOM = navBarHeight + 16;
   const CLOSED_Y = SHEET_HEIGHT - PEEK_HEIGHT - SAFE_BOTTOM;
 
   const sheetY = useRef(new Animated.Value(CLOSED_Y)).current;
@@ -97,10 +199,7 @@ export default function ControlScreen() {
   const sheetAnimationIdRef = useRef(0);
   const chevronRotate = useRef(new Animated.Value(0)).current;
   const chevronScale = useRef(new Animated.Value(1)).current;
-  const chevronSpin = chevronRotate.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '180deg'],
-  });
+  const chevronSpin = chevronRotate.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
 
   const pulseThenSettle = () => Animated.sequence([
     Animated.spring(chevronScale, { toValue: 1.35, useNativeDriver: true, tension: 260, friction: 6 }),
@@ -108,18 +207,12 @@ export default function ControlScreen() {
   ]);
 
   useEffect(() => {
-    const listenerId = sheetY.addListener(({ value }) => {
-      sheetPositionRef.current = value;
-    });
-
-    return () => {
-      sheetY.removeListener(listenerId);
-    };
+    const listenerId = sheetY.addListener(({ value }) => { sheetPositionRef.current = value; });
+    return () => { sheetY.removeListener(listenerId); };
   }, [sheetY]);
 
   useEffect(() => {
     closedYRef.current = CLOSED_Y;
-
     if (!sheetOpen) {
       sheetPositionRef.current = CLOSED_Y;
       sheetY.setValue(CLOSED_Y);
@@ -128,20 +221,14 @@ export default function ControlScreen() {
 
   const openSheet = () => {
     const animationId = ++sheetAnimationIdRef.current;
-
-    sheetY.stopAnimation((value) => {
-      sheetPositionRef.current = value;
-    });
+    sheetY.stopAnimation((value) => { sheetPositionRef.current = value; });
     setSheetOpen(true);
     Animated.parallel([
       Animated.spring(sheetY, { toValue: 0, useNativeDriver: false, tension: 58, friction: 13 }),
       Animated.spring(chevronRotate, { toValue: 1, useNativeDriver: true, tension: 130, friction: 8 }),
       pulseThenSettle(),
     ]).start(({ finished }) => {
-      if (!finished || animationId !== sheetAnimationIdRef.current) {
-        return;
-      }
-
+      if (!finished || animationId !== sheetAnimationIdRef.current) return;
       sheetPositionRef.current = 0;
     });
   };
@@ -149,25 +236,18 @@ export default function ControlScreen() {
   const closeSheet = () => {
     const animationId = ++sheetAnimationIdRef.current;
     const targetY = closedYRef.current;
-
-    sheetY.stopAnimation((value) => {
-      sheetPositionRef.current = value;
-    });
+    sheetY.stopAnimation((value) => { sheetPositionRef.current = value; });
     Animated.parallel([
       Animated.spring(sheetY, { toValue: targetY, useNativeDriver: false, tension: 72, friction: 18 }),
       Animated.spring(chevronRotate, { toValue: 0, useNativeDriver: true, tension: 130, friction: 8 }),
       pulseThenSettle(),
     ]).start(({ finished }) => {
-      if (!finished || animationId !== sheetAnimationIdRef.current) {
-        return;
-      }
-
+      if (!finished || animationId !== sheetAnimationIdRef.current) return;
       sheetPositionRef.current = targetY;
       setSheetOpen(false);
     });
   };
 
-  // Bounce chevrons when collapsed
   const bounceAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -181,17 +261,14 @@ export default function ControlScreen() {
     return () => loop.stop();
   }, [bounceAnim]);
 
-  // Sheet drag — lives on the whole sheet
   const dragStartY = useRef(0);
   const sheetDrag = useRef(
     PanResponder.create({
-      // Never pre-emptively claim touch start — lets taps reach Pressables
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) >= 6,
       onPanResponderGrant: () => {
         ++sheetAnimationIdRef.current;
         dragStartY.current = sheetPositionRef.current;
-
         sheetY.stopAnimation((value) => {
           sheetPositionRef.current = value;
           dragStartY.current = value;
@@ -204,24 +281,16 @@ export default function ControlScreen() {
       },
       onPanResponderRelease: (_, g) => {
         const cur = sheetPositionRef.current;
-        // Fast swipe down closes instantly regardless of position
-        if (g.vy > 0.4 || g.dy > 40 || cur > closedYRef.current * 0.42) {
-          closeSheet();
-        } else {
-          openSheet();
-        }
+        if (g.vy > 0.4 || g.dy > 40 || cur > closedYRef.current * 0.42) { closeSheet(); }
+        else { openSheet(); }
       },
       onPanResponderTerminate: () => {
-        if (sheetPositionRef.current > closedYRef.current * 0.42) {
-          closeSheet();
-        } else {
-          openSheet();
-        }
+        if (sheetPositionRef.current > closedYRef.current * 0.42) { closeSheet(); }
+        else { openSheet(); }
       },
     })
   ).current;
 
-  // Ball pan gesture
   const ballPan = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 4 || Math.abs(g.dy) > 4,
@@ -239,14 +308,14 @@ export default function ControlScreen() {
 
   const sendCore = async (cmd: 'ON' | 'OFF') => {
     if (!deviceReady) { router.replace('/scan' as Href); return false; }
-    if (!canSendCommands) { Alert.alert('Command unavailable', 'BLE channel not ready.'); return false; }
+    if (!canSendCommands) { Alert.alert(t('cmdUnavailable'), t('bleNotReady')); return false; }
     try {
       setSending(true);
       await sendCommandToBall(cmd);
       setLastCmd(cmd);
       return true;
     } catch (e) {
-      Alert.alert('Command failed', e instanceof Error ? e.message : 'Could not send.');
+      Alert.alert(t('cmdFailed'), e instanceof Error ? e.message : 'Could not send.');
       return false;
     } finally { setSending(false); }
   };
@@ -258,46 +327,31 @@ export default function ControlScreen() {
 
   const sendCustom = async () => {
     const cmd = commandDraft.trim();
-    if (!cmd) { Alert.alert('Missing command', 'Enter a command first.'); return; }
-    if (!cmdEnabled) { Alert.alert('Not connected', 'Connect to the ball first.'); return; }
+    if (!cmd) { Alert.alert(t('missingCmd'), t('enterCmdFirst')); return; }
+    if (!cmdEnabled) { Alert.alert(t('notConnected'), t('connectFirst')); return; }
     try {
       setSending(true);
       await sendCommandToBall(cmd);
       setLastCmd(cmd);
-      Alert.alert('Sent', `"${cmd}" dispatched to the ball.`);
+      Alert.alert(t('sent'), `"${cmd}" dispatched to the ball.`);
     } catch (e) {
-      Alert.alert('Failed', e instanceof Error ? e.message : 'Error.');
+      Alert.alert(t('failed'), e instanceof Error ? e.message : 'Error.');
     } finally { setSending(false); }
   };
 
   const handleSleepModeToggle = async () => {
     const nextSleepMode = !sleepMode;
-
-    if (!deviceReady) {
-      router.replace('/scan' as Href);
-      return;
-    }
-
-    if (!canSendCommands) {
-      Alert.alert('Sleep unavailable', 'The BLE command channel is not ready yet.');
-      return;
-    }
-
+    if (!deviceReady) { router.replace('/scan' as Href); return; }
+    if (!canSendCommands) { Alert.alert(t('sleepUnavailable'), 'The BLE command channel is not ready yet.'); return; }
     try {
       setSleepSending(true);
-
       const command = nextSleepMode ? 'SLEEP' : 'WAKE';
       await sendCommandToBall(command);
       setSleepMode(nextSleepMode);
       setLastCmd(command);
     } catch (e) {
-      Alert.alert(
-        'Sleep command failed',
-        e instanceof Error ? e.message : 'Could not change the device sleep mode.'
-      );
-    } finally {
-      setSleepSending(false);
-    }
+      Alert.alert(t('sleepCmdFailed'), e instanceof Error ? e.message : 'Could not change the device sleep mode.');
+    } finally { setSleepSending(false); }
   };
 
   const handleDisconnect = async () => {
@@ -306,25 +360,27 @@ export default function ControlScreen() {
     setDevPanelVisible(false);
     router.replace('/scan' as Href);
     try { await disconnectFromBall(); } catch (e) {
-      Alert.alert('Disconnect failed', e instanceof Error ? e.message : 'Error.');
+      Alert.alert(t('disconnectFailed'), e instanceof Error ? e.message : 'Error.');
     }
   };
+
+  const outerGlowColor = isDark ? 'rgba(93,24,54,0.24)' : 'rgba(168,85,247,0.10)';
+  const midGlowColor = isDark ? 'rgba(143,32,62,0.22)' : 'rgba(168,85,247,0.07)';
 
   return (
     <View style={styles.screen}>
       <LinearGradient
-        colors={['#142240', '#0F1A30', '#091121']}
+        colors={[theme.gradStart, theme.gradMid, theme.gradEnd]}
         locations={[0, 0.5, 1]}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Push status bar content down on Android */}
       {Platform.OS === 'android' && <View style={{ height: StatusBar.currentHeight ?? 24 }} />}
+      <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent />
 
-      {/* 3D Ball */}
       <View style={styles.ballStage}>
-        <Animated.View style={[styles.outerGlow, { transform: [{ translateY: glowY }] }]} />
-        <Animated.View style={[styles.midGlow, { transform: [{ translateY: glowY }] }]} />
+        <Animated.View style={[{ position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: outerGlowColor }, { transform: [{ translateY: glowY }] }]} />
+        <Animated.View style={[{ position: 'absolute', width: 240, height: 240, borderRadius: 120, backgroundColor: midGlowColor }, { transform: [{ translateY: glowY }] }]} />
         <View {...ballPan.panHandlers} style={styles.canvasWrap}>
           <Suspense fallback={<ActivityIndicator color="#F05568" size="large" />}>
             <Canvas camera={{ fov: 42, position: [0, 0, 6.2] }} onCreated={configureThreeNativeRenderer}>
@@ -345,20 +401,19 @@ export default function ControlScreen() {
 
       <View style={styles.stageSeparator} />
 
-      {/* Main scrollable content — padded so sheet peek never covers it */}
       <View style={[styles.content, { paddingBottom: PEEK_HEIGHT + SAFE_BOTTOM + 12 }]}>
 
         <View style={styles.statusRow}>
           <View style={[styles.statusChip, !deviceReady && styles.statusChipOff]}>
             <View style={[styles.statusDot, !deviceReady && styles.statusDotOff]} />
             <Text style={[styles.statusText, !deviceReady && styles.statusTextOff]}>
-              {deviceReady ? 'Connected · Ready' : 'Disconnected'}
+              {deviceReady ? t('connectedReady') : t('disconnected')}
             </Text>
           </View>
         </View>
 
         <View style={styles.volHeader}>
-          <Text style={styles.sectionLabel}>VOLUME</Text>
+          <Text style={styles.sectionLabel}>{t('volume')}</Text>
           <Text style={styles.volVal}>{volume}</Text>
         </View>
         <FrequencySlider minimumValue={0} maximumValue={100} step={10} value={volume} onValueChange={setVolume} />
@@ -413,30 +468,21 @@ export default function ControlScreen() {
         {!deviceReady && (
           <Pressable onPress={() => router.replace('/scan' as Href)} style={({ pressed }) => [styles.scanBtn, pressed && styles.pressed]}>
             <Ionicons name="scan" size={18} color="#080B14" />
-            <Text style={styles.scanBtnText}>Scan for Ball</Text>
+            <Text style={styles.scanBtnText}>{t('scanForBall')}</Text>
           </Pressable>
         )}
       </View>
 
-      {/* Tap-away backdrop */}
       {sheetOpen && <Pressable style={styles.backdrop} onPress={closeSheet} />}
 
-      {/* BOTTOM SHEET
-          Positioned so its bottom edge accounts for the system nav bar.
-          The sheet sits ABOVE the nav bar — never underneath it. */}
       <Animated.View
         {...sheetDrag.panHandlers}
         style={[
           styles.sheet,
-          {
-            paddingBottom: SAFE_BOTTOM,
-            bottom: navBarHeight,
-            height: SHEET_HEIGHT,
-          },
+          { paddingBottom: SAFE_BOTTOM, bottom: navBarHeight, height: SHEET_HEIGHT },
           { transform: [{ translateY: sheetY }] },
         ]}
       >
-        {/* Drag zone — visual only, no panHandlers needed here */}
         <View style={styles.dragZone}>
           <View style={styles.peekStrip}>
             <Animated.View style={[
@@ -452,18 +498,16 @@ export default function ControlScreen() {
 
             <Pressable onPress={sheetOpen ? closeSheet : openSheet} style={styles.peekCenter}>
               <View style={styles.handleBar} />
-              <Text style={styles.peekLabel}>{sheetOpen ? 'Close menu' : 'Quick menu'}</Text>
+              <Text style={styles.peekLabel}>{sheetOpen ? t('closeMenu') : t('quickMenu')}</Text>
             </Pressable>
 
-            {/* Subtle indicator dot for open/closed state */}
             <View style={[styles.peekDot, sheetOpen && styles.peekDotOpen]} />
           </View>
         </View>
 
-        {/* Sheet scrollable content */}
         <View style={[styles.sheetScroll, styles.sheetContent]}>
           <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Controls</Text>
+            <Text style={styles.sheetTitle}>{t('controls')}</Text>
             <Text style={styles.sheetSub}>CricTrack v2 · Device {suffix}</Text>
           </View>
 
@@ -476,18 +520,18 @@ export default function ControlScreen() {
             </View>
             <View style={styles.deviceCardText}>
               <Text style={styles.deviceCardTitle}>VisioBall</Text>
-              <Text style={styles.deviceCardSub}>{deviceReady ? 'Connected · 79% battery' : 'Disconnected · tap to scan'}</Text>
+              <Text style={styles.deviceCardSub}>{deviceReady ? t('connectedBattery') : t('disconnectedTapScan')}</Text>
             </View>
             <View style={[styles.deviceStatus, !deviceReady && styles.deviceStatusOff]} />
           </Pressable>
 
           <View style={styles.tilesGrid}>
-            <Tile color="#A855F7" icon="musical-notes" sub="EQ · bass · mix"
-              title="Audio" onPress={() => { closeSheet(); router.push('/sound' as Href); }} />
-            <Tile color="#60A5FA" icon="locate" sub="Radar · GPS"
-              title="Locate" onPress={() => { closeSheet(); router.push('/radar' as Href); }} />
-            <Tile color="#F472B6" icon="settings-sharp" sub="Alerts · device"
-              title="Settings" onPress={() => { closeSheet(); router.push('/settings' as Href); }} />
+            <Tile color="#A855F7" icon="musical-notes" sub={t('audioSub')} styles={styles}
+              title={t('audio')} onPress={() => { closeSheet(); router.push('/sound' as Href); }} />
+            <Tile color="#60A5FA" icon="locate" sub={t('locateSub')} styles={styles}
+              title={t('locate')} onPress={() => { closeSheet(); router.push('/radar' as Href); }} />
+            <Tile color="#F472B6" icon="settings-sharp" sub={t('settingsSub')} styles={styles}
+              title={t('appSettings')} onPress={() => { closeSheet(); router.push('/settings' as Href); }} />
           </View>
 
           <Pressable
@@ -495,8 +539,8 @@ export default function ControlScreen() {
             onPress={() => void handleSleepModeToggle()}
             style={({ pressed }) => [styles.sheetSleepRow, pressed && styles.pressed, sleepSending && styles.disabledPressable]}>
             <View>
-              <Text style={styles.sheetSleepText}>Sleep mode</Text>
-              <Text style={styles.sheetSleepSub}>{sleepSending ? 'Updating...' : 'Power save when idle'}</Text>
+              <Text style={styles.sheetSleepText}>{t('sleepMode')}</Text>
+              <Text style={styles.sheetSleepSub}>{sleepSending ? t('updating') : t('sleepModeSub')}</Text>
             </View>
             <View style={[styles.track, sleepMode && styles.trackOn]}>
               <View style={[styles.thumb, sleepMode && styles.thumbOn]} />
@@ -509,15 +553,15 @@ export default function ControlScreen() {
                 <Pressable onPress={() => { closeSheet(); setDevPanelVisible(false); router.replace('/scan' as Href); }}
                   style={({ pressed }) => [styles.devBtn, pressed && styles.pressed]}>
                   <Ionicons name="scan" size={18} color="#22C55E" />
-                  <Text style={styles.devBtnText}>Scan</Text>
+                  <Text style={styles.devBtnText}>{t('scan')}</Text>
                 </Pressable>
                 <Pressable disabled={!deviceReady} onPress={() => void handleDisconnect()}
                   style={({ pressed }) => [styles.devBtn, !deviceReady && styles.devBtnDisabled, pressed && styles.pressed]}>
                   <Ionicons name="power" size={18} color="#22C55E" />
-                  <Text style={styles.devBtnText}>Disconnect</Text>
+                  <Text style={styles.devBtnText}>{t('disconnect')}</Text>
                 </Pressable>
               </View>
-              <Text style={styles.devLabel}>Developer command</Text>
+              <Text style={styles.devLabel}>{t('devCommand')}</Text>
               <View style={styles.cmdRow}>
                 <TextInput
                   autoCapitalize="characters"
@@ -525,7 +569,7 @@ export default function ControlScreen() {
                   editable={!sending}
                   onChangeText={setCommandDraft}
                   placeholder="STATUS?"
-                  placeholderTextColor="#4A5268"
+                  placeholderTextColor={theme.textSubtle}
                   style={styles.cmdInput}
                   value={commandDraft}
                 />
@@ -534,193 +578,14 @@ export default function ControlScreen() {
                   <Ionicons name="send" size={16} color="#080B14" />
                 </Pressable>
               </View>
-              {lastCmd && <Text style={styles.lastCmd}>Last: {lastCmd}</Text>}
+              {lastCmd && <Text style={styles.lastCmd}>{t('last')} {lastCmd}</Text>}
             </View>
           )}
 
-          <Text style={styles.footer}>Firmware v2.4.1 · Up to date</Text>
+          <Text style={styles.footer}>{t('firmwareFooter')}</Text>
         </View>
       </Animated.View>
 
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#091121' },
-
-  outerGlow: { position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: 'rgba(93,24,54,0.24)' },
-  midGlow: { position: 'absolute', width: 240, height: 240, borderRadius: 120, backgroundColor: 'rgba(143,32,62,0.22)' },
-
-  ballStage: { height: Math.min(width * 0.88, 340), alignItems: 'center', justifyContent: 'center' },
-  canvasWrap: { width: Math.min(width, 390), height: Math.min(width * 0.82, 320) },
-
-  stageSeparator: { height: 1, backgroundColor: 'rgba(168,85,247,0.18)', marginHorizontal: 20 },
-  content: { flex: 1, paddingHorizontal: 20 },
-
-  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, marginBottom: 20 },
-  statusChip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(34,197,94,0.08)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(34,197,94,0.25)', paddingHorizontal: 12, paddingVertical: 7 },
-  statusChipOff: { backgroundColor: 'rgba(255,193,68,0.08)', borderColor: 'rgba(255,193,68,0.25)' },
-  statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#22C55E' },
-  statusDotOff: { backgroundColor: '#F59E0B' },
-  statusText: { color: '#22C55E', fontSize: 12, fontWeight: '800' },
-  statusTextOff: { color: '#F59E0B' },
-  metaText: { color: '#4A5268', fontSize: 11, fontWeight: '600' },
-
-  sectionLabel: { color: '#4A5268', fontSize: 10, fontWeight: '800', letterSpacing: 2 },
-  volHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  volVal: { color: '#A855F7', fontSize: 12, fontWeight: '900' },
-
-  ticksRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 4 },
-  tickItem: { alignItems: 'center', gap: 3 },
-  tickDot: { width: 3, height: 5, borderRadius: 1.5, backgroundColor: '#1E2740' },
-  tickDotActive: { backgroundColor: '#A855F7' },
-  tickLabel: { color: '#2A3050', fontSize: 8, fontWeight: '700' },
-  tickLabelActive: { color: '#A855F7' },
-
-  transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 28, marginTop: 20 },
-  ctrlSkipBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  playBtn: { width: 58, height: 58, borderRadius: 18, backgroundColor: '#A855F7', alignItems: 'center', justifyContent: 'center', shadowColor: '#A855F7', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.5, shadowRadius: 16, elevation: 10 },
-  playBtnOff: { backgroundColor: '#1C2238', shadowOpacity: 0 },
-  playIconNudge: { marginLeft: 3 },
-
-  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginVertical: 20 },
-
-  sleepRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 16, paddingVertical: 14 },
-  sleepTitle: { color: '#8892A8', fontSize: 15, fontWeight: '700' },
-  sleepSub: { color: '#4A5268', fontSize: 12, fontWeight: '500', marginTop: 2 },
-
-  track: { width: 48, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.08)', padding: 3 },
-  trackOn: { backgroundColor: '#A855F7' },
-  thumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#4A5568' },
-  thumbOn: { backgroundColor: '#fff', transform: [{ translateX: 20 }] },
-
-  scanBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#22C55E', borderRadius: 14, paddingVertical: 14, marginTop: 16 },
-  scanBtnText: { color: '#080B14', fontSize: 15, fontWeight: '800' },
-
-  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'transparent', zIndex: 10 },
-
-  // Sheet — bottom is set dynamically in JSX to sit above nav bar
-  sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    backgroundColor: '#0D1628',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    borderTopWidth: 2,
-    borderTopColor: 'rgba(168,85,247,0.75)',
-    borderLeftWidth: 1,
-    borderLeftColor: 'rgba(168,85,247,0.28)',
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(168,85,247,0.28)',
-    zIndex: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    elevation: 28,
-  },
-
-  // Large drag zone — the actual touch target (taller than the visual strip)
-  dragZone: {
-    width: '100%',
-    minHeight: 80,
-    justifyContent: 'center',
-  },
-  // Peek strip — visual only, lives inside dragZone
-  peekStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    gap: 10,
-  },
-  chevronContainer: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#A855F7',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  peekCenter: { flex: 1, alignItems: 'center', gap: 6 },
-  handleBar: { width: 44, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.18)' },
-  peekLabel: { color: '#8A9BBF', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-  peekDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#1E2A45' },
-  peekDotOpen: { backgroundColor: '#A855F7' },
-
-  sheetScroll: { flex: 1 },
-  sheetContent: { paddingHorizontal: 18, paddingBottom: 20 },
-  sheetHeader: { marginBottom: 18 },
-  sheetTitle: { color: '#F4F7FF', fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
-  sheetSub: { color: '#7A8CAE', fontSize: 13, fontWeight: '500', marginTop: 4 },
-
-  deviceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
-  },
-  deviceBall: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  deviceBallLine: { width: 48, height: 1, backgroundColor: 'rgba(255,255,255,0.3)', transform: [{ rotate: '6deg' }] },
-  deviceCardText: { flex: 1, marginLeft: 13 },
-  deviceCardTitle: { color: '#F4F7FF', fontSize: 16, fontWeight: '800' },
-  deviceCardSub: { color: '#7A8CAE', fontSize: 12, fontWeight: '500', marginTop: 2 },
-  deviceStatus: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#22C55E' },
-  deviceStatusOff: { backgroundColor: '#F59E0B' },
-
-  tilesGrid: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  tile: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 20,
-    padding: 14,
-    paddingBottom: 16,
-    borderWidth: 1,
-    gap: 12,
-  },
-  tileIconWrap: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  tileTitle: { color: '#F4F7FF', fontSize: 14, fontWeight: '800' },
-  tileSub: { color: '#7A8CAE', fontSize: 11, fontWeight: '500' },
-
-  sheetSleepRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  sheetSleepText: { color: '#F4F7FF', fontSize: 15, fontWeight: '800' },
-  sheetSleepSub: { color: '#7A8CAE', fontSize: 12, fontWeight: '500', marginTop: 2 },
-
-  devPanel: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 18, padding: 14, marginTop: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  devActions: { flexDirection: 'row', gap: 10, marginBottom: 4 },
-  devBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)', paddingVertical: 12 },
-  devBtnDisabled: { opacity: 0.4 },
-  devBtnText: { color: '#F4F7FF', fontSize: 13, fontWeight: '700' },
-  disabledPressable: { opacity: 0.55 },
-  devLabel: { color: '#7A8CAE', fontSize: 10, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 14, marginBottom: 8 },
-  cmdRow: { flexDirection: 'row', gap: 10 },
-  cmdInput: { flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', color: '#F4F7FF', fontSize: 14, fontWeight: '600', paddingHorizontal: 14, paddingVertical: 11 },
-  sendBtn: { width: 48, backgroundColor: '#A855F7', borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  sendBtnDisabled: { opacity: 0.4 },
-  lastCmd: { color: '#A855F7', fontSize: 12, fontWeight: '600', marginTop: 10 },
-
-  footer: { color: '#2A3050', fontSize: 12, fontWeight: '600', textAlign: 'center', marginTop: 20 },
-
-  pressed: { opacity: 0.75, transform: [{ scale: 0.97 }] },
-});

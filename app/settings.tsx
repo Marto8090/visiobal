@@ -2,12 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Href } from 'expo-router';
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Alert,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -15,26 +14,11 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-type ToggleRowProps = {
-  label: string;
-  onValueChange: (value: boolean) => void;
-  subtitle: string;
-  value: boolean;
-};
-
-type MenuRowProps = {
-  danger?: boolean;
-  hideChevron?: boolean;
-  label: string;
-  onPress?: () => void;
-  subtitle?: string;
-};
-
-type StaticRowProps = {
-  label: string;
-  subtitle?: string;
-};
+import { useI18n } from '@/src/context/I18nContext';
+import { ThemeColors, useTheme } from '@/src/context/ThemeContext';
+import { LOCALES, Locale } from '@/src/i18n/translations';
 
 const DEFAULT_SETTINGS = {
   batteryWarnings: true,
@@ -42,7 +26,83 @@ const DEFAULT_SETTINGS = {
   pushNotifications: true,
 };
 
-function Section({ children, title }: { children: ReactNode; title: string }) {
+function makeStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: theme.bg,
+      paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0,
+    },
+    header: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      paddingBottom: 14,
+      paddingHorizontal: 8,
+      paddingTop: 8,
+    },
+    backButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
+    headerTitle: { color: theme.text, flex: 1, fontSize: 18, fontWeight: '800', textAlign: 'center' },
+    headerSpacer: { width: 44 },
+    content: { paddingBottom: 32, paddingHorizontal: 16 },
+    section: { marginBottom: 22 },
+    sectionTitle: {
+      color: theme.textSubtle,
+      fontSize: 11,
+      fontWeight: '800',
+      letterSpacing: 1,
+      marginBottom: 8,
+      marginHorizontal: 4,
+    },
+    card: {
+      backgroundColor: theme.card,
+      borderColor: theme.borderAccent,
+      borderRadius: 18,
+      borderWidth: 1,
+      overflow: 'hidden',
+    },
+    row: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      minHeight: 56,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+    },
+    dangerRow: { backgroundColor: 'rgba(244,114,182,0.08)' },
+    rowText: { flex: 1, paddingRight: 12 },
+    rowLabel: { color: theme.text, fontSize: 15, fontWeight: '600' },
+    rowSubtitle: { color: theme.textMuted, fontSize: 12, fontWeight: '500', marginTop: 3 },
+    separator: { backgroundColor: theme.separator, height: 1, marginLeft: 16 },
+    dangerText: { color: '#F472B6' },
+    langRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+    },
+    langPill: {
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: theme.border,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: theme.bgDeep,
+    },
+    langPillActive: {
+      borderColor: '#A855F7',
+      backgroundColor: 'rgba(168,85,247,0.14)',
+    },
+    langPillText: { color: theme.textMuted, fontSize: 13, fontWeight: '700' },
+    langPillTextActive: { color: '#A855F7' },
+    pressed: { opacity: 0.72 },
+  });
+}
+
+type SectionProps = { children: ReactNode; title: string; styles: ReturnType<typeof makeStyles> };
+function Section({ children, styles, title }: SectionProps) {
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -51,11 +111,18 @@ function Section({ children, title }: { children: ReactNode; title: string }) {
   );
 }
 
-function Separator() {
+function Separator({ styles }: { styles: ReturnType<typeof makeStyles> }) {
   return <View style={styles.separator} />;
 }
 
-function ToggleRow({ label, onValueChange, subtitle, value }: ToggleRowProps) {
+type ToggleRowProps = {
+  label: string;
+  onValueChange: (value: boolean) => void;
+  styles: ReturnType<typeof makeStyles>;
+  subtitle: string;
+  value: boolean;
+};
+function ToggleRow({ label, onValueChange, styles, subtitle, value }: ToggleRowProps) {
   return (
     <View style={styles.row}>
       <View style={styles.rowText}>
@@ -63,17 +130,25 @@ function ToggleRow({ label, onValueChange, subtitle, value }: ToggleRowProps) {
         <Text style={styles.rowSubtitle}>{subtitle}</Text>
       </View>
       <Switch
-        ios_backgroundColor="#161A2E"
+        ios_backgroundColor="rgba(128,128,128,0.2)"
         onValueChange={onValueChange}
         thumbColor="#FFFFFF"
-        trackColor={{ false: '#161A2E', true: '#F472B6' }}
+        trackColor={{ false: 'rgba(128,128,128,0.2)', true: '#A855F7' }}
         value={value}
       />
     </View>
   );
 }
 
-function MenuRow({ danger = false, hideChevron = false, label, onPress, subtitle }: MenuRowProps) {
+type MenuRowProps = {
+  danger?: boolean;
+  hideChevron?: boolean;
+  label: string;
+  onPress?: () => void;
+  styles: ReturnType<typeof makeStyles>;
+  subtitle?: string;
+};
+function MenuRow({ danger = false, hideChevron = false, label, onPress, styles, subtitle }: MenuRowProps) {
   return (
     <Pressable
       onPress={onPress}
@@ -88,7 +163,8 @@ function MenuRow({ danger = false, hideChevron = false, label, onPress, subtitle
   );
 }
 
-function StaticRow({ label, subtitle }: StaticRowProps) {
+type StaticRowProps = { label: string; styles: ReturnType<typeof makeStyles>; subtitle?: string };
+function StaticRow({ label, styles, subtitle }: StaticRowProps) {
   return (
     <View style={styles.row}>
       <View style={styles.rowText}>
@@ -101,6 +177,9 @@ function StaticRow({ label, subtitle }: StaticRowProps) {
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { isDark, theme, toggleTheme } = useTheme();
+  const { locale, setLocale, t } = useI18n();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const appVersion = '1.4.0';
 
   const [pushNotifications, setPushNotifications] = useState(DEFAULT_SETTINGS.pushNotifications);
@@ -111,174 +190,123 @@ export default function SettingsScreen() {
     setPushNotifications(DEFAULT_SETTINGS.pushNotifications);
     setConnectionAlerts(DEFAULT_SETTINGS.connectionAlerts);
     setBatteryWarnings(DEFAULT_SETTINGS.batteryWarnings);
-
-    Alert.alert('Factory reset complete', 'App preferences have been restored to default mode.');
+    Alert.alert(t('factoryResetDoneTitle'), t('factoryResetDoneMessage'));
   };
 
   const confirmFactoryReset = () => {
     Alert.alert(
-      'Factory reset',
-      'This will remove all preferences put in the app and return it to default mode.',
+      t('factoryResetTitle'),
+      t('factoryResetMessage'),
       [
-        { style: 'cancel', text: 'Cancel' },
-        { onPress: resetToDefaults, style: 'destructive', text: 'Reset' },
+        { style: 'cancel', text: t('cancel') },
+        { onPress: resetToDefaults, style: 'destructive', text: t('reset') },
       ]
     );
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle={theme.statusBarStyle} />
+
       <View style={styles.header}>
         <Pressable
           accessibilityLabel="Go back"
           onPress={() => router.back()}
           style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
         >
-          <Ionicons color="#F472B6" name="arrow-back" size={22} />
+          <Ionicons color="#A855F7" name="chevron-back" size={26} />
         </Pressable>
-        <Text style={styles.headerTitle}>App Settings</Text>
+        <Text style={styles.headerTitle}>{t('appSettings')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Section title="NOTIFICATIONS">
+
+        <Section styles={styles} title={t('appearance')}>
           <ToggleRow
-            label="Push notifications"
+            label={t('darkMode')}
+            onValueChange={toggleTheme}
+            styles={styles}
+            subtitle={t('darkModeDesc')}
+            value={isDark}
+          />
+        </Section>
+
+        <Section styles={styles} title={t('language')}>
+          <View style={styles.langRow}>
+            {LOCALES.map((loc) => (
+              <Pressable
+                key={loc.code}
+                onPress={() => setLocale(loc.code as Locale)}
+                style={({ pressed }) => [
+                  styles.langPill,
+                  locale === loc.code && styles.langPillActive,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={{ fontSize: 16 }}>{loc.flag}</Text>
+                <Text style={[styles.langPillText, locale === loc.code && styles.langPillTextActive]}>
+                  {loc.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </Section>
+
+        <Section styles={styles} title={t('notifications')}>
+          <ToggleRow
+            label={t('pushNotifications')}
             onValueChange={setPushNotifications}
-            subtitle="Alerts for ball events"
+            styles={styles}
+            subtitle={t('pushNotificationsDesc')}
             value={pushNotifications}
           />
-          <Separator />
+          <Separator styles={styles} />
           <ToggleRow
-            label="Connection alerts"
+            label={t('connectionAlerts')}
             onValueChange={setConnectionAlerts}
-            subtitle="Device connect / disconnect"
+            styles={styles}
+            subtitle={t('connectionAlertsDesc')}
             value={connectionAlerts}
           />
-          <Separator />
+          <Separator styles={styles} />
           <ToggleRow
-            label="Battery warnings"
+            label={t('batteryWarnings')}
             onValueChange={setBatteryWarnings}
-            subtitle="Low battery reminder"
+            styles={styles}
+            subtitle={t('batteryWarningsDesc')}
             value={batteryWarnings}
           />
         </Section>
 
-        <Section title="DEVICE">
-          <StaticRow label="Device name" subtitle="VisioBall - Device A4" />
-          <Separator />
+        <Section styles={styles} title={t('device')}>
+          <StaticRow label={t('deviceName')} styles={styles} subtitle="VisioBall · Device A4" />
+          <Separator styles={styles} />
           <MenuRow
-            label="Firmware"
+            label={t('firmware')}
             onPress={() => router.push('/firmware-history' as Href)}
-            subtitle="v1.4.0 - Up to date"
+            styles={styles}
+            subtitle={t('firmwareUpToDate')}
           />
-          <Separator />
+          <Separator styles={styles} />
           <MenuRow
             danger
-            label="Factory reset"
+            label={t('factoryReset')}
             onPress={confirmFactoryReset}
-            subtitle="Erase all settings"
+            styles={styles}
+            subtitle={t('factoryResetDesc')}
           />
         </Section>
 
-        <Section title="ABOUT">
-          <MenuRow label="Privacy policy" onPress={() => router.push('/privacy' as Href)} />
-          <Separator />
-          <MenuRow label="Terms of service" onPress={() => router.push('/terms' as Href)} />
-          <Separator />
-          <MenuRow hideChevron label="App version" subtitle={appVersion} />
+        <Section styles={styles} title={t('about')}>
+          <MenuRow label={t('privacyPolicy')} onPress={() => router.push('/privacy' as Href)} styles={styles} />
+          <Separator styles={styles} />
+          <MenuRow label={t('termsOfService')} onPress={() => router.push('/terms' as Href)} styles={styles} />
+          <Separator styles={styles} />
+          <MenuRow hideChevron label={t('appVersion')} styles={styles} subtitle={appVersion} />
         </Section>
+
       </ScrollView>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#091121',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0,
-  },
-  header: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    paddingBottom: 14,
-    paddingHorizontal: 8,
-    paddingTop: 8,
-  },
-  backButton: {
-    alignItems: 'center',
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  headerTitle: {
-    color: '#F4F7FF',
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  headerSpacer: {
-    width: 44,
-  },
-  content: {
-    paddingBottom: 28,
-    paddingHorizontal: 4,
-  },
-  section: {
-    marginBottom: 18,
-  },
-  sectionTitle: {
-    color: '#7A8CAE',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.7,
-    marginBottom: 8,
-    marginHorizontal: 8,
-  },
-  card: {
-    backgroundColor: '#0F1220',
-    borderColor: 'rgba(244,114,182,0.22)',
-    borderRadius: 18,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  row: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    minHeight: 54,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  dangerRow: {
-    backgroundColor: 'rgba(244,114,182,0.08)',
-  },
-  rowText: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  rowLabel: {
-    color: '#F4F7FF',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  rowSubtitle: {
-    color: '#7A8CAE',
-    fontSize: 12,
-    fontWeight: '500',
-    marginTop: 4,
-  },
-  separator: {
-    backgroundColor: 'rgba(244,114,182,0.14)',
-    height: 1,
-    marginLeft: 14,
-  },
-  dangerText: {
-    color: '#F472B6',
-  },
-  pressed: {
-    opacity: 0.72,
-  },
-});

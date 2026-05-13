@@ -1,15 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useMemo } from 'react';
 import {
-  Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { useI18n } from '@/src/context/I18nContext';
+import { ThemeColors, useTheme } from '@/src/context/ThemeContext';
 
 type FirmwareUpdate = {
   changes: string[];
@@ -62,7 +65,28 @@ const updates: FirmwareUpdate[] = [
   },
 ];
 
-function FirmwareCard({ changes, date, title, version }: FirmwareUpdate) {
+function makeStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    safeArea: { flex: 1, backgroundColor: theme.bg },
+    header: { alignItems: 'center', flexDirection: 'row', paddingBottom: 14, paddingHorizontal: 8, paddingTop: 8 },
+    backButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
+    headerTitle: { color: theme.text, flex: 1, fontSize: 18, fontWeight: '800', textAlign: 'center' },
+    headerSpacer: { width: 44 },
+    content: { paddingBottom: 28, paddingHorizontal: 16 },
+    intro: { color: theme.textMuted, fontSize: 13, fontWeight: '600', lineHeight: 20, marginBottom: 14 },
+    card: { backgroundColor: theme.card, borderColor: theme.borderAccent, borderRadius: 18, borderWidth: 1, marginBottom: 14, padding: 16 },
+    cardHeader: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14, gap: 12 },
+    version: { color: '#F472B6', fontSize: 13, fontWeight: '900', marginBottom: 4 },
+    title: { color: theme.text, fontSize: 16, fontWeight: '800' },
+    date: { color: theme.textMuted, fontSize: 12, fontWeight: '700', marginTop: 1 },
+    changeRow: { alignItems: 'flex-start', flexDirection: 'row', gap: 10, marginTop: 9 },
+    dot: { backgroundColor: '#F472B6', borderRadius: 3, height: 6, marginTop: 7, width: 6 },
+    changeText: { color: theme.textMuted, flex: 1, fontSize: 13, fontWeight: '500', lineHeight: 20 },
+    pressed: { opacity: 0.72 },
+  });
+}
+
+function FirmwareCard({ changes, date, styles, title, version }: FirmwareUpdate & { styles: ReturnType<typeof makeStyles> }) {
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
@@ -72,7 +96,6 @@ function FirmwareCard({ changes, date, title, version }: FirmwareUpdate) {
         </View>
         <Text style={styles.date}>{date}</Text>
       </View>
-
       {changes.map((change) => (
         <View key={change} style={styles.changeRow}>
           <View style={styles.dot} />
@@ -85,10 +108,13 @@ function FirmwareCard({ changes, date, title, version }: FirmwareUpdate) {
 
 export default function FirmwareHistoryScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const { t } = useI18n();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle={theme.statusBarStyle} />
       <View style={styles.header}>
         <Pressable
           accessibilityLabel="Go back"
@@ -97,116 +123,16 @@ export default function FirmwareHistoryScreen() {
         >
           <Ionicons color="#F472B6" name="arrow-back" size={22} />
         </Pressable>
-        <Text style={styles.headerTitle}>Firmware History</Text>
+        <Text style={styles.headerTitle}>{t('firmwareHistory')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.intro}>
-          Update notes for the ESP32 firmware used by the VisioBall prototype.
-        </Text>
+        <Text style={styles.intro}>{t('firmwareIntro')}</Text>
         {updates.map((update) => (
-          <FirmwareCard key={update.version} {...update} />
+          <FirmwareCard key={update.version} styles={styles} {...update} />
         ))}
       </ScrollView>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#091121',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0,
-  },
-  header: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    paddingBottom: 14,
-    paddingHorizontal: 8,
-    paddingTop: 8,
-  },
-  backButton: {
-    alignItems: 'center',
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  headerTitle: {
-    color: '#F4F7FF',
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  headerSpacer: {
-    width: 44,
-  },
-  content: {
-    paddingBottom: 28,
-    paddingHorizontal: 4,
-  },
-  intro: {
-    color: '#7A8CAE',
-    fontSize: 13,
-    fontWeight: '600',
-    lineHeight: 20,
-    marginBottom: 14,
-    paddingHorizontal: 8,
-  },
-  card: {
-    backgroundColor: '#0F1220',
-    borderColor: 'rgba(244,114,182,0.22)',
-    borderRadius: 18,
-    borderWidth: 1,
-    marginBottom: 14,
-    padding: 16,
-  },
-  cardHeader: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-    gap: 12,
-  },
-  version: {
-    color: '#F472B6',
-    fontSize: 13,
-    fontWeight: '900',
-    marginBottom: 4,
-  },
-  title: {
-    color: '#F4F7FF',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  date: {
-    color: '#7A8CAE',
-    fontSize: 12,
-    fontWeight: '700',
-    marginTop: 1,
-  },
-  changeRow: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 9,
-  },
-  dot: {
-    backgroundColor: '#F472B6',
-    borderRadius: 3,
-    height: 6,
-    marginTop: 7,
-    width: 6,
-  },
-  changeText: {
-    color: '#7A8CAE',
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '500',
-    lineHeight: 20,
-  },
-  pressed: {
-    opacity: 0.72,
-  },
-});
