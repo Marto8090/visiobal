@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   FlatList,
@@ -25,6 +25,53 @@ const TRACKS = [
 ];
 
 const VOLUME_STEPS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+
+function parseDuration(d: string): number {
+  const [m, s] = d.split(':').map(Number);
+  return m * 60 + (s ?? 0);
+}
+
+function formatTime(s: number): string {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+function EqBars({ playing }: { playing: boolean }) {
+  const b1 = useRef(new Animated.Value(0.5)).current;
+  const b2 = useRef(new Animated.Value(0.8)).current;
+  const b3 = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    if (!playing) return;
+    const anim = (val: Animated.Value, dur: number) =>
+      Animated.loop(Animated.sequence([
+        Animated.timing(val, { toValue: 1, duration: dur, useNativeDriver: false }),
+        Animated.timing(val, { toValue: 0.15, duration: dur, useNativeDriver: false }),
+      ]));
+    const a1 = anim(b1, 380);
+    const a2 = anim(b2, 270);
+    const a3 = anim(b3, 460);
+    a1.start(); a2.start(); a3.start();
+    return () => { a1.stop(); a2.stop(); a3.stop(); };
+  }, [playing, b1, b2, b3]);
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 14, width: 18 }}>
+      {[b1, b2, b3].map((b, i) => (
+        <Animated.View
+          key={i}
+          style={{
+            width: 3, backgroundColor: '#A855F7', borderRadius: 2,
+            height: playing
+              ? b.interpolate({ inputRange: [0, 1], outputRange: [3, 14] })
+              : 6,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
 
 function makeStyles(theme: ThemeColors) {
   return StyleSheet.create({
@@ -66,8 +113,8 @@ function makeStyles(theme: ThemeColors) {
     trackMeta: { color: theme.textSubtle, fontSize: 12, fontWeight: '600' },
     progressWrap: { marginBottom: 14 },
     progressTrack: { width: '100%', height: 4, backgroundColor: theme.bgDeep, borderRadius: 2, marginBottom: 6, overflow: 'visible' },
-    progressFill: { width: '35%', height: '100%', backgroundColor: '#A855F7', borderRadius: 2 },
-    progressKnob: { position: 'absolute', left: '35%', top: -4, width: 12, height: 12, borderRadius: 6, backgroundColor: '#A855F7', marginLeft: -6 },
+    progressFill: { height: '100%', backgroundColor: '#A855F7', borderRadius: 2 },
+    progressKnob: { position: 'absolute', top: -4, width: 12, height: 12, borderRadius: 6, backgroundColor: '#A855F7', marginLeft: -6 },
     timeRow: { flexDirection: 'row', justifyContent: 'space-between' },
     timeText: { color: theme.textSubtle, fontSize: 10, fontWeight: '600' },
     controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 28, marginBottom: 4 },
@@ -116,17 +163,65 @@ export default function SoundPage() {
   const [selectedId, setSelectedId] = useState(TRACKS[0].id);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(50);
+  const [elapsed, setElapsed] = useState(0);
 
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playScale = useRef(new Animated.Value(1)).current;
   const skipBackScale = useRef(new Animated.Value(1)).current;
   const skipFwdScale = useRef(new Animated.Value(1)).current;
 
   const currentTrack = TRACKS.find(t => t.id === selectedId)!;
+  const totalSeconds = parseDuration(currentTrack.duration);
+  const progress = totalSeconds > 0 ? elapsed / totalSeconds : 0;
+  const progressPct = `${Math.round(progress * 100)}%` as `${number}%`;
+
+  // Reset elapsed when track changes
+  useEffect(() => {
+    setElapsed(0);
+  }, [selectedId]);
+
+  // Run/stop the playback timer
+  useEffect(() => {
+    if (!isPlaying) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      return;
+    }
+    timerRef.current = setInterval(() => {
+      setElapsed(e => {
+        if (e + 1 >= totalSeconds) {
+          // Auto-advance to next track
+          setSelectedId(prev => {
+            const i = TRACKS.findIndex(t => t.id === prev);
+            return TRACKS[(i + 1) % TRACKS.length].id;
+          });
+          return 0;
+        }
+        return e + 1;
+      });
+    }, 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [isPlaying, selectedId, totalSeconds]);
 
   const pressIn = (scale: Animated.Value) =>
     Animated.spring(scale, { toValue: 1.22, useNativeDriver: true, tension: 300, friction: 8 }).start();
   const pressOut = (scale: Animated.Value) =>
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }).start();
+
+  const skipNext = () => {
+    const i = TRACKS.findIndex(t => t.id === selectedId);
+    setSelectedId(TRACKS[(i + 1) % TRACKS.length].id);
+    setIsPlaying(true);
+  };
+
+  const skipPrev = () => {
+    if (elapsed > 3) {
+      setElapsed(0);
+    } else {
+      const i = TRACKS.findIndex(t => t.id === selectedId);
+      setSelectedId(TRACKS[(i - 1 + TRACKS.length) % TRACKS.length].id);
+      setIsPlaying(true);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -157,11 +252,11 @@ export default function SoundPage() {
 
           <View style={styles.progressWrap}>
             <View style={styles.progressTrack}>
-              <View style={styles.progressFill} />
-              <View style={styles.progressKnob} />
+              <View style={[styles.progressFill, { width: progressPct }]} />
+              <View style={[styles.progressKnob, { left: progressPct }]} />
             </View>
             <View style={styles.timeRow}>
-              <Text style={styles.timeText}>1:24</Text>
+              <Text style={styles.timeText}>{formatTime(elapsed)}</Text>
               <Text style={styles.timeText}>{currentTrack.duration}</Text>
             </View>
           </View>
@@ -170,6 +265,7 @@ export default function SoundPage() {
             <Animated.View style={{ transform: [{ scale: skipBackScale }] }}>
               <Pressable
                 style={styles.ctrlBtn}
+                onPress={skipPrev}
                 onPressIn={() => pressIn(skipBackScale)}
                 onPressOut={() => pressOut(skipBackScale)}
               >
@@ -196,6 +292,7 @@ export default function SoundPage() {
             <Animated.View style={{ transform: [{ scale: skipFwdScale }] }}>
               <Pressable
                 style={styles.ctrlBtn}
+                onPress={skipNext}
                 onPressIn={() => pressIn(skipFwdScale)}
                 onPressOut={() => pressOut(skipFwdScale)}
               >
@@ -247,7 +344,7 @@ export default function SoundPage() {
               >
                 <View style={[styles.trackNum, active && styles.trackNumActive]}>
                   {active
-                    ? <Ionicons name="volume-high" size={14} color="#A855F7" />
+                    ? <EqBars playing={isPlaying} />
                     : <Text style={styles.trackNumText}>{index + 1}</Text>
                   }
                 </View>
@@ -255,7 +352,7 @@ export default function SoundPage() {
                   <Text style={[styles.trackName, active && styles.trackNameActive]} numberOfLines={1}>{item.title}</Text>
                   <Text style={styles.trackGenre}>{item.genre}</Text>
                 </View>
-                <Text style={styles.trackDuration}>{item.duration}</Text>
+                <Text style={styles.trackDuration}>{active ? formatTime(elapsed) : item.duration}</Text>
               </Pressable>
             );
           }}
