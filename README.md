@@ -6,14 +6,14 @@ A React Native mobile application for connecting to and controlling a BLE-enable
 
 ## Features
 
-- **Bluetooth scanning & connection** — scans for nearby BLE devices, connects to the VisioBall, and maintains a persistent session across screens
-- **3D ball visualization** — interactive Three.js model that responds to touch (pan to rotate) and reflects device state
-- **Device control** — send BLE commands (`ON`, `OFF`, `FREQ:<hz>`, `SLEEP`, `WAKE`, custom) directly from the app
-- **Radar screen** — animated BLE search visualization with pulse rings while scanning
-- **Sound & music player** — track list with volume control, frequency slider, and playback UI
-- **Light & dark theme** — full theme system with a deep navy dark mode and a periwinkle-blue light mode, applies to every screen
-- **5 languages** — English, Dutch, French, German, Bulgarian (switch in Settings)
-- **Settings** — theme toggle, language picker, links to Privacy Policy, Terms of Service, and Firmware History
+- **Bluetooth scanning & connection** - scans for nearby BLE devices, connects to the VisioBall, and maintains a persistent session across screens
+- **3D ball visualization** - interactive Three.js model that responds to touch (pan to rotate) and reflects device state
+- **Device control** - send BLE commands (`ON`, `OFF`, `FREQ:<hz>`, `SLEEP`, `WAKE`, custom) directly from the app
+- **Radar screen** - animated BLE search visualization with pulse rings while scanning
+- **Sound & music player** - track list with volume control, frequency slider, and playback UI
+- **Light & dark theme** - full theme system with a deep navy dark mode and a periwinkle-blue light mode, applies to every screen
+- **5 languages** - English, Dutch, French, German, Bulgarian (switch in Settings)
+- **Settings** - theme toggle, language picker, links to Privacy Policy, Terms of Service, and Firmware History
 
 ---
 
