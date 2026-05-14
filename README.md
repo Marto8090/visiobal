@@ -17,14 +17,6 @@ A React Native mobile application for connecting to and controlling a BLE-enable
 
 ---
 
-## Screenshots
-
-| Landing | Control | Radar | Settings |
-|---------|---------|-------|----------|
-| *(add screenshot)* | *(add screenshot)* | *(add screenshot)* | *(add screenshot)* |
-
----
-
 ## Tech Stack
 
 | Layer | Technology |
