@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Canvas } from '@react-three/fiber/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Suspense, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -33,6 +33,14 @@ const LIGHT_MODES = ['Constant', 'Breathing', 'Heartbeat'] as const;
 type LightMode = typeof LIGHT_MODES[number];
 const LIGHT_KEYS: Record<LightMode, string> = { Constant: 'lightConstant', Breathing: 'lightBreathing', Heartbeat: 'lightHeartbeat' };
 
+const TRACKS = [
+  { title: 'Lora — Deep Focus', genre: 'Ambient', duration: '4:05' },
+  { title: 'Calm River Flow', genre: 'Nature', duration: '3:42' },
+  { title: 'Zen State', genre: 'Meditation', duration: '5:18' },
+  { title: 'Ocean Waves', genre: 'Nature', duration: '6:01' },
+  { title: 'Ambient Pulse', genre: 'Electronic', duration: '4:33' },
+];
+
 function makeStyles(theme: ThemeColors) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: theme.bgDeep },
@@ -41,12 +49,14 @@ function makeStyles(theme: ThemeColors) {
     header: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      alignItems: 'flex-start',
+      alignItems: 'center',
       paddingHorizontal: 24,
       paddingTop: 12,
+      paddingBottom: 4,
     },
+    wordmarkWrap: { gap: 2 },
     wordmark: { color: theme.text, fontSize: 22, fontWeight: '900', letterSpacing: 5 },
-    tagline: { color: theme.textMuted, fontSize: 11, fontWeight: '600', letterSpacing: 1, marginTop: 3 },
+    tagline: { color: theme.textMuted, fontSize: 11, fontWeight: '600', letterSpacing: 1 },
     powerBtn: {
       width: 44, height: 44, backgroundColor: theme.card, borderRadius: 14,
       alignItems: 'center', justifyContent: 'center',
@@ -56,9 +66,26 @@ function makeStyles(theme: ThemeColors) {
     bottom: { paddingHorizontal: 16, paddingBottom: 16 },
     bottomCard: {
       backgroundColor: theme.card,
-      borderRadius: 28, borderWidth: 1, borderColor: theme.border,
-      padding: 16, gap: 14,
+      borderRadius: 28, borderWidth: 1, borderColor: theme.borderStrong,
+      padding: 16, gap: 12,
     },
+    trackRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    trackArt: {
+      width: 44, height: 44, borderRadius: 13,
+      backgroundColor: theme.bgDeep,
+      borderWidth: 1, borderColor: 'rgba(168,85,247,0.22)',
+      alignItems: 'center', justifyContent: 'center',
+    },
+    trackInfo: { flex: 1 },
+    trackTitle: { color: theme.text, fontSize: 14, fontWeight: '800', marginBottom: 2 },
+    trackMeta: { color: theme.textMuted, fontSize: 12, fontWeight: '600' },
+    playingBadge: {
+      flexDirection: 'row', alignItems: 'center', gap: 5,
+      backgroundColor: 'rgba(168,85,247,0.12)',
+      paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
+    },
+    playingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#A855F7' },
+    playingText: { color: '#A855F7', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
     musicControls: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 28,
     },
@@ -87,17 +114,19 @@ function makeStyles(theme: ThemeColors) {
     },
     primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
     secondaryBtn: {
-      width: 56, backgroundColor: theme.card, borderRadius: 20,
+      width: 56, backgroundColor: theme.bgDeep, borderRadius: 20,
       justifyContent: 'center', alignItems: 'center',
+      borderWidth: 1, borderColor: 'rgba(220,38,38,0.28)',
     },
     overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.55)' },
     sheet: {
       backgroundColor: theme.cardAlt,
       borderTopLeftRadius: 28, borderTopRightRadius: 28,
       padding: 20, paddingBottom: 48,
-      borderTopWidth: 1, borderColor: theme.border,
+      borderTopWidth: 2, borderLeftWidth: 1, borderRightWidth: 1,
+      borderColor: 'rgba(220,38,38,0.45)',
     },
-    handle: { width: 40, height: 4, backgroundColor: theme.handleBar, borderRadius: 2, alignSelf: 'center', marginBottom: 22 },
+    handle: { width: 44, height: 5, backgroundColor: theme.handleBar, borderRadius: 3, alignSelf: 'center', marginBottom: 22 },
     sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 },
     sheetTitle: { color: theme.text, fontSize: 22, fontWeight: '900' },
     closeBtn: {
@@ -150,15 +179,33 @@ export default function LandingPage() {
   const [lightMode, setLightMode] = useState<LightMode>('Constant');
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(50);
+  const [trackIndex, setTrackIndex] = useState(0);
 
   const playScale = useRef(new Animated.Value(1)).current;
   const skipBackScale = useRef(new Animated.Value(1)).current;
   const skipFwdScale = useRef(new Animated.Value(1)).current;
+  const livePulse = useRef(new Animated.Value(1)).current;
 
   const pressIn = (scale: Animated.Value) =>
     Animated.spring(scale, { toValue: 1.22, useNativeDriver: true, tension: 300, friction: 8 }).start();
   const pressOut = (scale: Animated.Value) =>
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }).start();
+
+  useEffect(() => {
+    if (!isPlaying) { livePulse.setValue(1); return; }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(livePulse, { toValue: 0.25, duration: 550, useNativeDriver: true }),
+        Animated.timing(livePulse, { toValue: 1, duration: 550, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [isPlaying, livePulse]);
+
+  const skipNext = () => { setTrackIndex(i => (i + 1) % TRACKS.length); };
+  const skipPrev = () => { setTrackIndex(i => (i - 1 + TRACKS.length) % TRACKS.length); };
+  const currentTrack = TRACKS[trackIndex];
 
   const outerGlowColor = isDark ? 'rgba(93,24,54,0.24)' : 'rgba(168,85,247,0.10)';
   const midGlowColor = isDark ? 'rgba(143,32,62,0.22)' : 'rgba(168,85,247,0.07)';
@@ -175,12 +222,15 @@ export default function LandingPage() {
         <View style={styles.container}>
 
           <View style={styles.header}>
-            <View>
+            <View style={styles.wordmarkWrap}>
               <Text style={styles.wordmark}>VISIOBALL</Text>
               <Text style={styles.tagline}>{t('tagline')}</Text>
             </View>
-            <Pressable style={({ pressed }) => [styles.powerBtn, pressed && styles.pressed]}>
-              <Ionicons name="power" size={22} color="#DC2626" />
+            <Pressable
+              style={({ pressed }) => [styles.powerBtn, pressed && styles.pressed]}
+              onPress={() => router.push('/settings')}
+            >
+              <Ionicons name="settings-outline" size={20} color={theme.textMuted} />
             </Pressable>
           </View>
 
@@ -204,10 +254,27 @@ export default function LandingPage() {
           <View style={styles.bottom}>
             <View style={styles.bottomCard}>
 
+              <View style={styles.trackRow}>
+                <View style={styles.trackArt}>
+                  <Ionicons name="musical-notes" size={20} color="#A855F7" />
+                </View>
+                <View style={styles.trackInfo}>
+                  <Text style={styles.trackTitle} numberOfLines={1}>{currentTrack.title}</Text>
+                  <Text style={styles.trackMeta}>{currentTrack.genre} · {currentTrack.duration}</Text>
+                </View>
+                {isPlaying && (
+                  <View style={styles.playingBadge}>
+                    <Animated.View style={[styles.playingDot, { opacity: livePulse }]} />
+                    <Text style={styles.playingText}>LIVE</Text>
+                  </View>
+                )}
+              </View>
+
               <View style={styles.musicControls}>
                 <Animated.View style={{ transform: [{ scale: skipBackScale }] }}>
                   <Pressable
                     style={styles.ctrlBtn}
+                    onPress={skipPrev}
                     onPressIn={() => pressIn(skipBackScale)}
                     onPressOut={() => pressOut(skipBackScale)}
                   >
@@ -234,6 +301,7 @@ export default function LandingPage() {
                 <Animated.View style={{ transform: [{ scale: skipFwdScale }] }}>
                   <Pressable
                     style={styles.ctrlBtn}
+                    onPress={skipNext}
                     onPressIn={() => pressIn(skipFwdScale)}
                     onPressOut={() => pressOut(skipFwdScale)}
                   >
