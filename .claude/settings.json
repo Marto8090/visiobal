@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/c/Users/User/.platformio/packages/toolchain-xtensa-esp-elf/bin/xtensa-esp-elf-nm.exe /c/Users/User/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf/lib/esp32/no-rtti/libstdc++.a)",
+      "Bash(grep -n \"xtensa-esp-elf-g++.*firmware\" /d/pio_verbose.txt | head -3)",
+      "Read(//d//**)",
+      "Bash(/c/Users/User/.platformio/packages/toolchain-xtensa-esp-elf/bin/xtensa-esp32-elf-g++.exe -print-search-dirs)",
+      "Bash(/c/Users/User/.platformio/packages/toolchain-xtensa-esp-elf/bin/xtensa-esp32-elf-g++.exe -print-multi-lib)",
+      "Bash(/c/Users/User/.platformio/packages/toolchain-xtensa-esp-elf/bin/xtensa-esp-elf-nm.exe /c/Users/User/.platformio/packages/toolchain-xtensa-esp-elf/xtensa-esp-elf/lib/esp32/psram/no-rtti/libstdc++.a)",
+      "PowerShell(& \"C:\\\\Users\\\\User\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run --target upload -d \"D:\\\\visiobal-hardware-main\\\\visiobal-hardware-main\" 2>&1)",
+      "PowerShell(Get-WMIObject Win32_PnPEntity | Where-Object { $_.Name -match 'COM\\\\d+' } | Select-Object Name, DeviceID)",
+      "PowerShell([System.IO.Ports.SerialPort]::getportnames\\(\\))",
+      "PowerShell($drive = Get-PSDrive C; \"Free: $\\([math]::Round\\($drive.Free/1GB, 2\\)\\) GB\")",
+      "PowerShell(& \"D:\\\\Desktop\\\\OL 2\\\\Visioball_Site\\\\visiobal\\\\android\\\\gradlew.bat\" --stop 2>&1)",
+      "Bash(.\\\\gradlew.bat --stop)",
+      "PowerShell(cd \"D:\\\\Desktop\\\\OL 2\\\\Visioball_Site\\\\visiobal\\\\android\"; .\\\\gradlew.bat app:assembleDebug -x lint -x test --build-cache -PreactNativeDevServerPort=8081 -PreactNativeArchitectures=arm64-v8a 2>&1 | Out-File -FilePath \"D:\\\\gradle_build.log\" -Encoding utf8; Write-Host \"Exit code: $LASTEXITCODE\")",
+      "PowerShell(cd \"D:\\\\Desktop\\\\OL 2\\\\Visioball_Site\\\\visiobal\\\\android\"; .\\\\gradlew.bat app:assembleDebug -x lint -x test --build-cache -PreactNativeDevServerPort=8081 -PreactNativeArchitectures=arm64-v8a 2>&1 | Out-File -FilePath \"D:\\\\gradle_build.log\" -Encoding utf8; Write-Host \"Exit: $LASTEXITCODE\")",
+      "PowerShell($adb = \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\"; & $adb devices)",
+      "PowerShell($adb = \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\"; & $adb shell pm list packages | Select-String \"visioball\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\User\\.gradle\\caches\\8.14.3\\transforms",
+      "C:\\Users\\User\\.gradle\\caches\\8.14.3",
+      "C:\\Users\\User\\.gradle\\caches"
+    ]
+  }
+}
