@@ -13,8 +13,8 @@ const SCAN_DURATION_MS = 8000;
 const DISCONNECT_TIMEOUT_MS = 5000;
 const ADVERTISING_RECOVERY_MS = 1500;
 export const TARGET_BLE_DEVICE_NAME = 'VisioBal';
-export const COMMAND_SERVICE_UUID = '6E400001-B5A3-F393-E0A9-E50E24DCCA9E';
-export const COMMAND_CHARACTERISTIC_UUID = '6E400002-B5A3-F393-E0A9-E50E24DCCA9E';
+export const COMMAND_SERVICE_UUID        = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+export const COMMAND_CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
 type BleRuntime = typeof import('react-native-ble-plx');
 export type BluetoothSessionSnapshot = {
   connectedDevice: BallDevice | null;
