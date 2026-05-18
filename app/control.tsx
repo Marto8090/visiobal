@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Canvas } from '@react-three/fiber/native';
-import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -26,13 +26,14 @@ import { FrequencySlider } from '@/src/components/FrequencySlider';
 import { BackgroundDust, TexturedVisioball } from '@/src/components/VisioballModel';
 import { useI18n } from '@/src/context/I18nContext';
 import { ThemeColors, useTheme } from '@/src/context/ThemeContext';
-import { configureThreeNativeRenderer } from '@/src/utils/configureThreeNativeRenderer';
 import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
+import { configureThreeNativeRenderer } from '@/src/utils/configureThreeNativeRenderer';
 
 const { width, height } = Dimensions.get('window');
 const VOLUME_STEPS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-const PEEK_HEIGHT = 48;
-const SHEET_HEIGHT = height * 0.60;
+const PEEK_HEIGHT = 43;
+const CONTROLS_MENU_HEIGHT_OFFSET = 1;
+const SHEET_HEIGHT = height * 0.60 - CONTROLS_MENU_HEIGHT_OFFSET;
 
 function clamp(v: number, lo: number, hi: number) { return Math.min(Math.max(v, lo), hi); }
 
