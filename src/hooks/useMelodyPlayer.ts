@@ -4,12 +4,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { MELODIES, generateMelodyWAV } from '../utils/audioSynth';
 
+export type MelodyIndex = 0 | 1 | 2 | 3 | 4;
+
 interface PlayerState {
   isPlaying: boolean;
   isLoading: boolean;
   positionMs: number;
   durationMs: number;
-  loadedIdx: 0 | 1 | null;
+  loadedIdx: MelodyIndex | null;
 }
 
 const INITIAL: PlayerState = {
@@ -31,7 +33,7 @@ export function useMelodyPlayer() {
     };
   }, []);
 
-  const play = useCallback(async (melodyIdx: 0 | 1) => {
+  const play = useCallback(async (melodyIdx: MelodyIndex) => {
     setState(s => ({ ...s, isLoading: true }));
     try {
       const prev = soundRef.current;

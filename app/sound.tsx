@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   FlatList,
   Pressable,
@@ -16,25 +17,19 @@ import { FrequencySlider } from '@/src/components/FrequencySlider';
 import { useI18n } from '@/src/context/I18nContext';
 import { ThemeColors, useTheme } from '@/src/context/ThemeContext';
 import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
+import { MelodyIndex, useMelodyPlayer } from '@/src/hooks/useMelodyPlayer';
 
-// Tracks with a `command` field send their BLE command to the hardware when selected.
-// Tracks without `command` are demo-only (hardware not yet programmed for them).
 const TRACKS = [
-  { id: '1', title: 'C Major Journey',  duration: '3:45', genre: 'Ambient',     command: 'SONG1' },
-  { id: '2', title: 'E Minor Groove',   duration: '2:37', genre: 'Electronic',  command: 'SONG2' },
-  { id: '3', title: 'Zen State',        duration: '5:18', genre: 'Meditation',  command: null },
-  { id: '4', title: 'Ocean Waves',      duration: '6:01', genre: 'Nature',      command: null },
-  { id: '5', title: 'Ambient Pulse',    duration: '4:33', genre: 'Electronic',  command: null },
+  { id: '1', title: 'C Major Journey', duration: '0:03', genre: 'Ambient',    command: 'SONG1', melodyIdx: 0 as MelodyIndex },
+  { id: '2', title: 'E Minor Groove',  duration: '0:02', genre: 'Electronic', command: 'SONG2', melodyIdx: 1 as MelodyIndex },
+  { id: '3', title: 'Zen State',       duration: '0:05', genre: 'Meditation', command: null,    melodyIdx: 2 as MelodyIndex },
+  { id: '4', title: 'Ocean Waves',     duration: '0:04', genre: 'Nature',     command: null,    melodyIdx: 3 as MelodyIndex },
+  { id: '5', title: 'Ambient Pulse',   duration: '0:03', genre: 'Electronic', command: null,    melodyIdx: 4 as MelodyIndex },
 ] as const;
 
 type Track = typeof TRACKS[number];
 
 const VOLUME_STEPS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-
-function parseDuration(d: string): number {
-  const [m, s] = d.split(':').map(Number);
-  return m * 60 + (s ?? 0);
-}
 
 function formatTime(s: number): string {
   const m = Math.floor(s / 60);
@@ -151,7 +146,6 @@ function makeStyles(theme: ThemeColors) {
       borderWidth: 1, borderColor: theme.border, gap: 12,
     },
     trackRowActive: { borderColor: 'rgba(168,85,247,0.28)', backgroundColor: theme.bgDeep },
-    trackRowDemo: { opacity: 0.55 },
     trackNum: { width: 30, height: 30, borderRadius: 9, backgroundColor: theme.bgDeep, alignItems: 'center', justifyContent: 'center' },
     trackNumActive: { backgroundColor: 'rgba(168,85,247,0.15)' },
     trackNumText: { color: theme.textSubtle, fontSize: 12, fontWeight: '700' },
@@ -166,11 +160,11 @@ function makeStyles(theme: ThemeColors) {
       paddingHorizontal: 5, paddingVertical: 2,
     },
     liveChipText: { color: '#22C55E', fontSize: 9, fontWeight: '800' },
-    demoChip: {
-      backgroundColor: theme.bgDeep, borderRadius: 5,
+    synthChip: {
+      backgroundColor: 'rgba(168,85,247,0.10)', borderRadius: 5,
       paddingHorizontal: 5, paddingVertical: 2,
     },
-    demoChipText: { color: theme.textSubtle, fontSize: 9, fontWeight: '700' },
+    synthChipText: { color: '#A855F7', fontSize: 9, fontWeight: '700' },
     pressed: { opacity: 0.75, transform: [{ scale: 0.97 }] },
   });
 }
@@ -181,58 +175,61 @@ export default function SoundPage() {
   const { t } = useI18n();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const { isConnected, canSendCommands, sendCommandToBall } = useBluetoothSession();
+  const player = useMelodyPlayer();
 
   const [selectedId, setSelectedId] = useState<Track['id']>(TRACKS[0].id);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(50);
-  const [elapsed, setElapsed] = useState(0);
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playScale = useRef(new Animated.Value(1)).current;
   const skipBackScale = useRef(new Animated.Value(1)).current;
   const skipFwdScale = useRef(new Animated.Value(1)).current;
 
   const currentTrack: Track = TRACKS.find(t => t.id === selectedId) ?? TRACKS[0];
-  const totalSeconds = parseDuration(currentTrack.duration);
-  const progress = totalSeconds > 0 ? elapsed / totalSeconds : 0;
+  const isCurrentLoaded = player.loadedIdx === currentTrack.melodyIdx;
+  const elapsed = isCurrentLoaded ? Math.round(player.positionMs / 1000) : 0;
+  const totalSeconds = isCurrentLoaded && player.durationMs > 0
+    ? Math.round(player.durationMs / 1000)
+    : parseInt(currentTrack.duration.split(':')[1] ?? '0', 10) +
+      parseInt(currentTrack.duration.split(':')[0] ?? '0', 10) * 60;
+  const progress = totalSeconds > 0 ? Math.min(elapsed / totalSeconds, 1) : 0;
   const progressPct = `${Math.round(progress * 100)}%` as `${number}%`;
-  const isHardwareTrack = currentTrack.command !== null;
+  const displayIsPlaying = player.isPlaying || player.isLoading;
 
-  // Send BLE command whenever a hardware track is selected
+  // Keep a ref so effects can call player methods without re-running
+  const playerRef = useRef(player);
+  playerRef.current = player;
+
+  // Sync player with intent whenever track or play state changes
+  useEffect(() => {
+    const { melodyIdx } = currentTrack;
+    if (isPlaying) {
+      if (playerRef.current.loadedIdx === melodyIdx) {
+        void playerRef.current.resume();
+      } else {
+        void playerRef.current.play(melodyIdx);
+      }
+    } else {
+      void playerRef.current.pause();
+    }
+  }, [isPlaying, selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync volume to player
+  useEffect(() => {
+    void playerRef.current.setVolume(volume / 100);
+  }, [volume]);
+
+  // Send BLE command when a hardware track is selected while connected
   useEffect(() => {
     if (currentTrack.command && isConnected && canSendCommands) {
       void sendCommandToBall(currentTrack.command).catch(() => {});
     }
   }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reset elapsed when track changes
-  useEffect(() => { setElapsed(0); }, [selectedId]);
-
-  // Playback timer
-  useEffect(() => {
-    if (!isPlaying) {
-      if (timerRef.current) clearInterval(timerRef.current);
-      return;
-    }
-    timerRef.current = setInterval(() => {
-      setElapsed(e => {
-        if (e + 1 >= totalSeconds) {
-          setSelectedId(prev => {
-            const i = TRACKS.findIndex(t => t.id === prev);
-            return TRACKS[(i + 1) % TRACKS.length].id;
-          });
-          return 0;
-        }
-        return e + 1;
-      });
-    }, 1000);
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [isPlaying, selectedId, totalSeconds]);
-
-  const pressIn = (scale: Animated.Value) =>
-    Animated.spring(scale, { toValue: 1.22, useNativeDriver: true, tension: 300, friction: 8 }).start();
-  const pressOut = (scale: Animated.Value) =>
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }).start();
+  const pressIn = useCallback((scale: Animated.Value) =>
+    Animated.spring(scale, { toValue: 1.22, useNativeDriver: true, tension: 300, friction: 8 }).start(), []);
+  const pressOut = useCallback((scale: Animated.Value) =>
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }).start(), []);
 
   const skipNext = () => {
     const i = TRACKS.findIndex(t => t.id === selectedId);
@@ -242,7 +239,7 @@ export default function SoundPage() {
 
   const skipPrev = () => {
     if (elapsed > 3) {
-      setElapsed(0);
+      void playerRef.current.play(currentTrack.melodyIdx);
     } else {
       const i = TRACKS.findIndex(t => t.id === selectedId);
       setSelectedId(TRACKS[(i - 1 + TRACKS.length) % TRACKS.length].id);
@@ -268,7 +265,6 @@ export default function SoundPage() {
 
         <View style={styles.playerCard}>
 
-          {/* Connection status strip */}
           <View style={styles.statusBar}>
             <View style={[styles.statusDot, { backgroundColor: connectedColor }]} />
             <Text style={[styles.statusText, { color: connectedColor }]}>{connectedLabel}</Text>
@@ -284,7 +280,7 @@ export default function SoundPage() {
             <View style={styles.trackTexts}>
               <Text style={styles.trackTitle} numberOfLines={1}>{currentTrack.title}</Text>
               <Text style={styles.trackMeta}>{currentTrack.genre} · {currentTrack.duration}</Text>
-              {isHardwareTrack && (
+              {currentTrack.command && (
                 <View style={styles.hwBadge}>
                   <View style={styles.hwDot} />
                   <Text style={styles.hwText}>ON HARDWARE</Text>
@@ -300,7 +296,7 @@ export default function SoundPage() {
             </View>
             <View style={styles.timeRow}>
               <Text style={styles.timeText}>{formatTime(elapsed)}</Text>
-              <Text style={styles.timeText}>{currentTrack.duration}</Text>
+              <Text style={styles.timeText}>{formatTime(totalSeconds)}</Text>
             </View>
           </View>
 
@@ -318,17 +314,20 @@ export default function SoundPage() {
 
             <Animated.View style={{ transform: [{ scale: playScale }] }}>
               <Pressable
-                onPress={() => setIsPlaying(v => !v)}
+                onPress={() => !player.isLoading && setIsPlaying(v => !v)}
                 onPressIn={() => pressIn(playScale)}
                 onPressOut={() => pressOut(playScale)}
                 style={styles.playBtn}
               >
-                <Ionicons
-                  name={isPlaying ? 'pause' : 'play'}
-                  size={28}
-                  color="#F9FAFB"
-                  style={!isPlaying && { marginLeft: 3 }}
-                />
+                {player.isLoading
+                  ? <ActivityIndicator size="small" color="#F9FAFB" />
+                  : <Ionicons
+                      name={displayIsPlaying ? 'pause' : 'play'}
+                      size={28}
+                      color="#F9FAFB"
+                      style={!displayIsPlaying && { marginLeft: 3 }}
+                    />
+                }
               </Pressable>
             </Animated.View>
 
@@ -380,20 +379,18 @@ export default function SoundPage() {
           contentContainerStyle={styles.listContent}
           renderItem={({ item, index }) => {
             const active = item.id === selectedId;
-            const isHw = item.command !== null;
             return (
               <Pressable
                 onPress={() => { setSelectedId(item.id); setIsPlaying(true); }}
                 style={({ pressed }) => [
                   styles.trackRow,
                   active && styles.trackRowActive,
-                  !isHw && styles.trackRowDemo,
                   pressed && styles.pressed,
                 ]}
               >
                 <View style={[styles.trackNum, active && styles.trackNumActive]}>
                   {active
-                    ? <EqBars playing={isPlaying} />
+                    ? <EqBars playing={displayIsPlaying} />
                     : <Text style={styles.trackNumText}>{index + 1}</Text>
                   }
                 </View>
@@ -404,10 +401,12 @@ export default function SoundPage() {
                   <Text style={styles.trackGenre}>{item.genre}</Text>
                 </View>
                 <View style={styles.trackRight}>
-                  <Text style={styles.trackDuration}>{active ? formatTime(elapsed) : item.duration}</Text>
-                  {isHw
+                  <Text style={styles.trackDuration}>
+                    {active ? formatTime(elapsed) : item.duration}
+                  </Text>
+                  {item.command
                     ? <View style={styles.liveChip}><Text style={styles.liveChipText}>LIVE</Text></View>
-                    : <View style={styles.demoChip}><Text style={styles.demoChipText}>DEMO</Text></View>
+                    : <View style={styles.synthChip}><Text style={styles.synthChipText}>SYNTH</Text></View>
                   }
                 </View>
               </Pressable>

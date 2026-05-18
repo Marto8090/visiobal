@@ -1,4 +1,5 @@
-// Reproduces the two Mozzi melodies from the ESP32 firmware in pure JS.
+// Reproduces the two Mozzi melodies from the ESP32 firmware in pure JS,
+// plus three original melodies in the same synthesis style.
 // Each Note contains the lead frequency, note duration in ms,
 // and the harmony ratio that the firmware's second oscillator uses.
 
@@ -40,7 +41,64 @@ export const MELODY_2: Note[] = [
   { freq: 164.81, dur: 125, harmonyRatio: 1.0 },
 ];
 
-export const MELODIES = [MELODY_1, MELODY_2] as const;
+// Zen State — G major pentatonic, slow descending arc then return.
+// Unison + fifth harmonics for a warm, open quality.
+export const MELODY_3: Note[] = [
+  { freq: 392.00, dur: 500, harmonyRatio: 1.0 },  // G4
+  { freq: 329.63, dur: 500, harmonyRatio: 1.5 },  // E4
+  { freq: 293.66, dur: 375, harmonyRatio: 1.0 },  // D4
+  { freq: 246.94, dur: 500, harmonyRatio: 1.5 },  // B3
+  { freq: 220.00, dur: 500, harmonyRatio: 1.0 },  // A3
+  { freq: 196.00, dur: 750, harmonyRatio: 1.0 },  // G3 — long settle
+  { freq: 220.00, dur: 375, harmonyRatio: 1.5 },  // A3
+  { freq: 293.66, dur: 500, harmonyRatio: 1.0 },  // D4
+  { freq: 329.63, dur: 375, harmonyRatio: 1.5 },  // E4
+  { freq: 392.00, dur: 750, harmonyRatio: 1.0 },  // G4 — long resolve
+];
+
+// Ocean Waves — A natural minor, two wave shapes rising and falling.
+// Sub-octave harmony on low notes gives depth; fifth on peaks lifts.
+export const MELODY_4: Note[] = [
+  { freq: 164.81, dur: 250, harmonyRatio: 0.5 },  // E3  — wave floor
+  { freq: 220.00, dur: 250, harmonyRatio: 1.0 },  // A3
+  { freq: 261.63, dur: 375, harmonyRatio: 1.0 },  // C4
+  { freq: 329.63, dur: 500, harmonyRatio: 1.5 },  // E4  — first crest
+  { freq: 261.63, dur: 375, harmonyRatio: 1.0 },  // C4
+  { freq: 220.00, dur: 250, harmonyRatio: 0.5 },  // A3
+  { freq: 164.81, dur: 375, harmonyRatio: 0.5 },  // E3  — trough
+  { freq: 196.00, dur: 250, harmonyRatio: 1.0 },  // G3
+  { freq: 246.94, dur: 250, harmonyRatio: 1.0 },  // B3
+  { freq: 293.66, dur: 375, harmonyRatio: 1.5 },  // D4
+  { freq: 349.23, dur: 500, harmonyRatio: 1.5 },  // F4  — second crest
+  { freq: 293.66, dur: 375, harmonyRatio: 1.0 },  // D4
+  { freq: 220.00, dur: 250, harmonyRatio: 0.5 },  // A3
+  { freq: 164.81, dur: 500, harmonyRatio: 0.5 },  // E3  — floor (loops)
+];
+
+// Ambient Pulse — A Dorian, short punchy notes with a driving rhythmic feel.
+// Octave-up harmony throughout keeps the energy high.
+export const MELODY_5: Note[] = [
+  { freq: 220.00, dur: 125, harmonyRatio: 2.0 },  // A3
+  { freq: 220.00, dur: 125, harmonyRatio: 2.0 },  // A3
+  { freq: 293.66, dur: 250, harmonyRatio: 1.5 },  // D4
+  { freq: 220.00, dur: 125, harmonyRatio: 2.0 },  // A3
+  { freq: 369.99, dur: 125, harmonyRatio: 1.5 },  // F#4
+  { freq: 329.63, dur: 250, harmonyRatio: 2.0 },  // E4
+  { freq: 293.66, dur: 125, harmonyRatio: 1.5 },  // D4
+  { freq: 246.94, dur: 125, harmonyRatio: 2.0 },  // B3
+  { freq: 220.00, dur: 125, harmonyRatio: 1.5 },  // A3
+  { freq: 220.00, dur: 125, harmonyRatio: 2.0 },  // A3
+  { freq: 261.63, dur: 250, harmonyRatio: 1.5 },  // C4
+  { freq: 220.00, dur: 125, harmonyRatio: 2.0 },  // A3
+  { freq: 196.00, dur: 125, harmonyRatio: 1.5 },  // G3
+  { freq: 220.00, dur: 250, harmonyRatio: 2.0 },  // A3
+  { freq: 246.94, dur: 125, harmonyRatio: 1.5 },  // B3
+  { freq: 293.66, dur: 125, harmonyRatio: 2.0 },  // D4
+  { freq: 329.63, dur: 250, harmonyRatio: 1.5 },  // E4
+  { freq: 220.00, dur: 500, harmonyRatio: 1.5 },  // A3  — resolve
+];
+
+export const MELODIES = [MELODY_1, MELODY_2, MELODY_3, MELODY_4, MELODY_5] as const;
 
 const SAMPLE_RATE = 22050;
 const NOTE_GAP_MS = 30;       // matches firmware NOTE_GAP_MS
