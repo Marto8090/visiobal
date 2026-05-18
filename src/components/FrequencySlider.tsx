@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { LayoutChangeEvent, PanResponder, StyleSheet, View } from 'react-native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { LayoutChangeEvent, PanResponder, PanResponderGestureState, StyleSheet, View } from 'react-native';
 
 type FrequencySliderProps = {
   disabled?: boolean;
@@ -39,19 +39,28 @@ export function FrequencySlider({
   value,
 }: FrequencySliderProps) {
   const [trackWidth, setTrackWidth] = useState(0);
+  const [dragRatio, setDragRatio] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const gestureStartX = useRef(0);
+  const lastPositionX = useRef(0);
+  const lastEmittedValue = useRef<number | null>(null);
   const boundedValue = clamp(value, minimumValue, maximumValue);
   const valueRange = Math.max(maximumValue - minimumValue, step);
-  const ratio = (boundedValue - minimumValue) / valueRange;
+  const ratio = clamp((boundedValue - minimumValue) / valueRange, 0, 1);
+  const visualRatio = isDragging ? dragRatio : ratio;
   const thumbLeft = trackWidth
-    ? clamp(ratio * trackWidth - THUMB_SIZE / 2, 0, Math.max(trackWidth - THUMB_SIZE, 0))
+    ? clamp(visualRatio * trackWidth - THUMB_SIZE / 2, 0, Math.max(trackWidth - THUMB_SIZE, 0))
     : 0;
 
-  const updateValueFromPosition = (positionX: number, complete: boolean) => {
+  const updateValueFromPosition = useCallback((positionX: number, complete: boolean) => {
     if (!trackWidth || disabled) {
       return;
     }
 
     const boundedPosition = clamp(positionX, 0, trackWidth);
+    lastPositionX.current = boundedPosition;
+    setDragRatio(boundedPosition / trackWidth);
+
     const rawValue = minimumValue + (boundedPosition / trackWidth) * valueRange;
     const steppedValue = clamp(
       snapToStep(rawValue, minimumValue, step),
@@ -60,29 +69,42 @@ export function FrequencySlider({
     );
     const nextValue = roundSliderValue(steppedValue, step);
 
-    onValueChange?.(nextValue);
+    if (nextValue !== lastEmittedValue.current) {
+      lastEmittedValue.current = nextValue;
+      onValueChange?.(nextValue);
+    }
 
     if (complete) {
       onSlidingComplete?.(nextValue);
     }
-  };
+  }, [disabled, maximumValue, minimumValue, onSlidingComplete, onValueChange, step, trackWidth, valueRange]);
 
-  const panResponder = PanResponder.create({
+  const updateValueFromGesture = useCallback((gestureState: PanResponderGestureState, complete: boolean) => {
+    const nextPositionX = complete ? lastPositionX.current : gestureStartX.current + gestureState.dx;
+    updateValueFromPosition(nextPositionX, complete);
+  }, [updateValueFromPosition]);
+
+  const panResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: () => !disabled,
     onPanResponderGrant: (event) => {
-      updateValueFromPosition(event.nativeEvent.locationX, false);
+      lastEmittedValue.current = null;
+      setIsDragging(true);
+      gestureStartX.current = event.nativeEvent.locationX;
+      updateValueFromPosition(gestureStartX.current, false);
     },
-    onPanResponderMove: (event) => {
-      updateValueFromPosition(event.nativeEvent.locationX, false);
+    onPanResponderMove: (_event, gestureState) => {
+      updateValueFromGesture(gestureState, false);
     },
-    onPanResponderRelease: (event) => {
-      updateValueFromPosition(event.nativeEvent.locationX, true);
+    onPanResponderRelease: (_event, gestureState) => {
+      updateValueFromGesture(gestureState, true);
+      setIsDragging(false);
     },
-    onPanResponderTerminate: (event) => {
-      updateValueFromPosition(event.nativeEvent.locationX, true);
+    onPanResponderTerminate: (_event, gestureState) => {
+      updateValueFromGesture(gestureState, true);
+      setIsDragging(false);
     },
     onStartShouldSetPanResponder: () => !disabled,
-  });
+  }), [disabled, updateValueFromGesture, updateValueFromPosition]);
 
   return (
     <View
@@ -91,9 +113,9 @@ export function FrequencySlider({
         setTrackWidth(event.nativeEvent.layout.width);
       }}
       style={[styles.trackArea, disabled && styles.trackAreaDisabled]}>
-      <View style={styles.track} />
-      <View style={[styles.fill, { width: `${ratio * 100}%` }]} />
-      <View style={[styles.thumb, { left: thumbLeft }, disabled && styles.thumbDisabled]} />
+      <View pointerEvents="none" style={styles.track} />
+      <View pointerEvents="none" style={[styles.fill, { width: `${visualRatio * 100}%` }]} />
+      <View pointerEvents="none" style={[styles.thumb, { left: thumbLeft }, disabled && styles.thumbDisabled]} />
     </View>
   );
 }
