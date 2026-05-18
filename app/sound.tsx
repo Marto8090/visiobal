@@ -353,7 +353,7 @@ export default function SoundPage() {
               value={volume}
               minimumValue={0}
               maximumValue={100}
-              step={10}
+              step={1}
               onValueChange={setVolume}
               onSlidingComplete={setVolume}
             />
