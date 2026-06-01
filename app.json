@@ -23,9 +23,6 @@
       "permissions": [
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN",
-        "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.BLUETOOTH",
-        "android.permission.BLUETOOTH_ADMIN",
         "android.permission.BLUETOOTH_CONNECT"
       ],
       "package": "com.marto8090.visiobal"
@@ -50,6 +47,12 @@
         "react-native-ble-plx",
         {
           "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to scan for and connect to Visiobal devices"
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "recordAudioAndroid": false
         }
       ]
     ],

@@ -1,4 +1,4 @@
-import { Audio, AVPlaybackStatus } from 'expo-av';
+import { AudioPlayer, AudioStatus, createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { File, Paths } from 'expo-file-system';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -23,22 +23,22 @@ const INITIAL: PlayerState = {
 };
 
 export function useMelodyPlayer() {
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const playerRef = useRef<AudioPlayer | null>(null);
   const [state, setState] = useState<PlayerState>(INITIAL);
 
   useEffect(() => {
-    void Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false });
+    void setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: false });
     return () => {
-      soundRef.current?.unloadAsync().catch(() => {});
+      playerRef.current?.remove();
+      playerRef.current = null;
     };
   }, []);
 
   const play = useCallback(async (melodyIdx: MelodyIndex) => {
     setState(s => ({ ...s, isLoading: true }));
     try {
-      const prev = soundRef.current;
-      soundRef.current = null;
-      if (prev) await prev.unloadAsync().catch(() => {});
+      playerRef.current?.remove();
+      playerRef.current = null;
 
       // Yield so React renders the loading indicator before the synchronous WAV generation
       await new Promise<void>(resolve => setTimeout(resolve, 0));
@@ -47,23 +47,23 @@ export function useMelodyPlayer() {
       const file = new File(Paths.cache, `melody_${melodyIdx}.wav`);
       file.write(new Uint8Array(wav));
 
-      const onStatus = (status: AVPlaybackStatus) => {
+      const onStatus = (status: AudioStatus) => {
         if (!status.isLoaded) return;
         setState(s => ({
           ...s,
-          isPlaying: status.isPlaying,
-          positionMs: status.positionMillis,
-          ...(status.durationMillis != null ? { durationMs: status.durationMillis } : {}),
+          isPlaying: status.playing,
+          positionMs: Math.round(status.currentTime * 1000),
+          ...(status.duration > 0 ? { durationMs: Math.round(status.duration * 1000) } : {}),
         }));
       };
 
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: file.uri },
-        { shouldPlay: true, isLooping: true, volume: 1.0 },
-        onStatus,
-      );
+      const player = createAudioPlayer({ uri: file.uri }, { updateInterval: 250 });
+      player.loop = true;
+      player.volume = 1.0;
+      player.addListener('playbackStatusUpdate', onStatus);
+      player.play();
 
-      soundRef.current = sound;
+      playerRef.current = player;
       setState(s => ({ ...s, isLoading: false, isPlaying: true, loadedIdx: melodyIdx }));
     } catch (err) {
       console.warn('useMelodyPlayer play:', err);
@@ -72,23 +72,24 @@ export function useMelodyPlayer() {
   }, []);
 
   const pause = useCallback(async () => {
-    await soundRef.current?.pauseAsync().catch(() => {});
+    playerRef.current?.pause();
   }, []);
 
   const resume = useCallback(async () => {
-    await soundRef.current?.playAsync().catch(() => {});
+    playerRef.current?.play();
   }, []);
 
   const stop = useCallback(async () => {
-    const snd = soundRef.current;
-    soundRef.current = null;
-    await snd?.stopAsync().catch(() => {});
-    await snd?.unloadAsync().catch(() => {});
+    playerRef.current?.pause();
+    playerRef.current?.remove();
+    playerRef.current = null;
     setState(INITIAL);
   }, []);
 
   const setVolume = useCallback(async (vol: number) => {
-    await soundRef.current?.setVolumeAsync(Math.max(0, Math.min(1, vol))).catch(() => {});
+    if (playerRef.current) {
+      playerRef.current.volume = Math.max(0, Math.min(1, vol));
+    }
   }, []);
 
   return { ...state, play, pause, resume, stop, setVolume };
