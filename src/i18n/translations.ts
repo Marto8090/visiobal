@@ -13,6 +13,8 @@ type TranslationMap = Record<string, string>;
 const en: TranslationMap = {
   // Shared
   loading: 'Loading',
+  reconnecting: 'Reconnecting to VisioBall...',
+  reconnectFailed: 'Ball not found - scanning...',
   cancel: 'Cancel',
   disconnect: 'Disconnect',
   failed: 'Failed',
@@ -131,6 +133,8 @@ const en: TranslationMap = {
 
 const nl: TranslationMap = {
   loading: 'Laden',
+  reconnecting: 'VisioBall opnieuw verbinden...',
+  reconnectFailed: 'Bal niet gevonden - scannen...',
   cancel: 'Annuleren',
   disconnect: 'Verbreken',
   failed: 'Mislukt',
@@ -241,6 +245,8 @@ const nl: TranslationMap = {
 
 const fr: TranslationMap = {
   loading: 'Chargement',
+  reconnecting: 'Reconnexion a VisioBall...',
+  reconnectFailed: 'Balle introuvable - scan en cours...',
   cancel: 'Annuler',
   disconnect: 'Déconnecter',
   failed: 'Échec',
@@ -351,6 +357,8 @@ const fr: TranslationMap = {
 
 const de: TranslationMap = {
   loading: 'Laden',
+  reconnecting: 'VisioBall wird wiederverbunden...',
+  reconnectFailed: 'Ball nicht gefunden - Suche...',
   cancel: 'Abbrechen',
   disconnect: 'Trennen',
   failed: 'Fehlgeschlagen',
@@ -461,6 +469,8 @@ const de: TranslationMap = {
 
 const bg: TranslationMap = {
   loading: 'Зареждане',
+  reconnecting: 'Свързване с VisioBall...',
+  reconnectFailed: 'Топката не е намерена - търсене...',
   cancel: 'Отказ',
   disconnect: 'Прекъсни',
   failed: 'Неуспешно',

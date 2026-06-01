@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PermissionsAndroid, Platform } from 'react-native';
 import type {
   BleManager as BleManagerType,
@@ -8,6 +9,7 @@ import type {
 } from 'react-native-ble-plx';
 
 import { BallDevice } from '../types/bluetooth';
+import { STORAGE_KEYS } from '../utils/storage';
 
 const SCAN_DURATION_MS = 8000;
 const DISCONNECT_TIMEOUT_MS = 5000;
@@ -63,6 +65,7 @@ function setConnectedDevice(nextDevice: Device | null) {
 
   if (nextDevice && hasExactTargetName(nextDevice)) {
     lastKnownDeviceId = nextDevice.id;
+    void AsyncStorage.setItem(STORAGE_KEYS.LAST_DEVICE_ID, nextDevice.id);
   }
 
   updateSessionSnapshot();
@@ -608,5 +611,23 @@ export async function sendCommandToBall(command: string): Promise<void> {
       COMMAND_CHARACTERISTIC_UUID,
       payload
     );
+  }
+}
+
+async function loadPersistedDeviceId(): Promise<void> {
+  if (lastKnownDeviceId !== null) return;
+  const saved = await AsyncStorage.getItem(STORAGE_KEYS.LAST_DEVICE_ID);
+  if (saved) lastKnownDeviceId = saved;
+}
+
+export async function tryAutoReconnect(): Promise<boolean> {
+  await loadPersistedDeviceId();
+  if (!lastKnownDeviceId) return false;
+  try {
+    await requestBluetoothPermissions();
+    await ensureBluetoothReady();
+    return await connectToBall({ id: lastKnownDeviceId, name: TARGET_BLE_DEVICE_NAME });
+  } catch {
+    return false;
   }
 }
