@@ -1,6 +1,7 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Canvas } from '@react-three/fiber/native';
 import { useRouter } from 'expo-router';
-import { Suspense, useEffect, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -16,6 +17,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BackgroundDust, TexturedVisioball } from '@/src/components/VisioballModel';
 import { useI18n } from '@/src/context/I18nContext';
 import { ThemeColors, useTheme } from '@/src/context/ThemeContext';
+import { tryAutoReconnect } from '@/src/services/bluetoothService';
+import { STORAGE_KEYS } from '@/src/utils/storage';
 import { configureThreeNativeRenderer } from '@/src/utils/configureThreeNativeRenderer';
 
 const { width } = Dimensions.get('window');
@@ -59,10 +62,27 @@ export default function IndexScreen() {
   const progress = useRef(new Animated.Value(0)).current;
   const redirectedRef = useRef(false);
   const glowY = useRef(new Animated.Value(0)).current;
+  const reconnectedRef = useRef(false);
+  const [statusLabel, setStatusLabel] = useState<string | null>(null);
 
   const loaderColor = isDark ? '#22D16F' : '#A855F7';
 
   useEffect(() => {
+    // Check for a saved device and attempt reconnect in parallel with animation.
+    const reconnectPromise = AsyncStorage.getItem(STORAGE_KEYS.LAST_DEVICE_ID)
+      .then(savedId => {
+        if (!savedId) return false;
+        setStatusLabel(t('reconnecting'));
+        return Promise.race<boolean>([
+          tryAutoReconnect(),
+          new Promise<false>(res => setTimeout(() => res(false), 5000)),
+        ]);
+      })
+      .then(result => {
+        reconnectedRef.current = Boolean(result);
+      })
+      .catch(() => {});
+
     const duration = 2000 + Math.floor(Math.random() * 2001);
     const animation = Animated.timing(progress, {
       toValue: 1,
@@ -70,13 +90,17 @@ export default function IndexScreen() {
       easing: Easing.inOut(Easing.cubic),
       useNativeDriver: false,
     });
+
     animation.start(({ finished }) => {
       if (!finished || redirectedRef.current) return;
       redirectedRef.current = true;
-      router.replace('/scan');
+      reconnectPromise.then(() => {
+        router.replace(reconnectedRef.current ? '/control' : '/scan');
+      });
     });
+
     return () => { progress.stopAnimation(); };
-  }, [progress, router]);
+  }, [progress, router, t]);
 
   const fillWidth = progress.interpolate({ inputRange: [0, 1], outputRange: [0, LOADER_WIDTH] });
   const dotTranslateX = progress.interpolate({ inputRange: [0, 1], outputRange: [0, LOADER_WIDTH - LOADER_DOT_SIZE] });
@@ -128,7 +152,7 @@ export default function IndexScreen() {
               transform: [{ translateX: dotTranslateX }],
             }} />
           </View>
-          <Text style={styles.loaderLabel}>{t('loading')}</Text>
+          <Text style={styles.loaderLabel}>{statusLabel ?? t('loading')}</Text>
         </View>
       </View>
     </SafeAreaView>

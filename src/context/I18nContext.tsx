@@ -1,6 +1,8 @@
-import { createContext, ReactNode, useContext, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 
-import { Locale, translations } from '../i18n/translations';
+import { Locale, LOCALES, translations } from '../i18n/translations';
+import { STORAGE_KEYS } from '../utils/storage';
 
 type I18nContextType = {
   locale: Locale;
@@ -15,9 +17,24 @@ const I18nContext = createContext<I18nContextType>({
 });
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocale] = useState<Locale>('en');
+  const [locale, setLocaleState] = useState<Locale>('en');
+
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEYS.LOCALE).then(saved => {
+      if (saved && LOCALES.some(l => l.code === saved)) {
+        setLocaleState(saved as Locale);
+      }
+    });
+  }, []);
+
+  const setLocale = (next: Locale) => {
+    void AsyncStorage.setItem(STORAGE_KEYS.LOCALE, next);
+    setLocaleState(next);
+  };
+
   const t = (key: string): string =>
     translations[locale]?.[key] ?? translations.en[key] ?? key;
+
   return (
     <I18nContext.Provider value={{ locale, setLocale, t }}>
       {children}
