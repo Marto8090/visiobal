@@ -23,6 +23,28 @@ type FirmwareUpdate = {
 
 const updates: FirmwareUpdate[] = [
   {
+    version: 'v2.6.0',
+    title: 'Security hardening',
+    date: 'June 2026',
+    changes: [
+      'Added a BLE command whitelist - only permitted commands (ON, OFF, SLEEP, WAKE, PLAY, PAUSE, NEXT, PREV, PING, SONG1-5, VOL, FREQ) are forwarded to the hardware. Anything else is rejected before transmission.',
+      'Removed the raw developer command panel from the production build.',
+      'Cleaned up duplicate Bluetooth permission entries in the Android manifest.',
+      'Improved connection setup with MTU negotiation (512 bytes) for more efficient data transfer.',
+    ],
+  },
+  {
+    version: 'v2.5.0',
+    title: 'Persistence and auto-reconnect',
+    date: 'June 2026',
+    changes: [
+      'Theme (dark or light) and language preference are now saved to device storage and restored on every launch - no more resetting to defaults.',
+      'The app remembers the last connected ball. On the next launch it attempts a silent background reconnect during the splash screen and skips the scan screen if successful.',
+      'Migrated the in-app audio engine from expo-av to expo-audio for improved playback reliability.',
+      'All five synthesised melodies now match the harmonic output of the ESP32 Mozzi firmware tracks.',
+    ],
+  },
+  {
     version: 'v2.4.1',
     title: 'Low power test mode',
     date: 'May 2026',
