@@ -15,7 +15,6 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -119,18 +118,7 @@ function makeStyles(theme: ThemeColors, isDark: boolean) {
     trackOn: { backgroundColor: '#A855F7' },
     thumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: theme.textSubtle },
     thumbOn: { backgroundColor: '#fff', transform: [{ translateX: 20 }] },
-    devPanel: { backgroundColor: theme.card, borderRadius: 18, padding: 14, marginTop: 8, borderWidth: 1, borderColor: theme.border },
-    devActions: { flexDirection: 'row', gap: 10, marginBottom: 4 },
-    devBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.bgDeep, borderRadius: 14, borderWidth: 1, borderColor: theme.border, paddingVertical: 12 },
-    devBtnDisabled: { opacity: 0.4 },
-    devBtnText: { color: theme.text, fontSize: 13, fontWeight: '700' },
     disabledPressable: { opacity: 0.55 },
-    devLabel: { color: theme.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 14, marginBottom: 8 },
-    cmdRow: { flexDirection: 'row', gap: 10 },
-    cmdInput: { flex: 1, backgroundColor: theme.bgDeep, borderRadius: 12, borderWidth: 1, borderColor: theme.border, color: theme.text, fontSize: 14, fontWeight: '600', paddingHorizontal: 14, paddingVertical: 11 },
-    sendBtn: { width: 48, backgroundColor: '#A855F7', borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    sendBtnDisabled: { opacity: 0.4 },
-    lastCmd: { color: '#A855F7', fontSize: 12, fontWeight: '600', marginTop: 10 },
     footer: { color: theme.textSubtle, fontSize: 12, fontWeight: '600', textAlign: 'center', marginTop: 20 },
     pressed: { opacity: 0.75, transform: [{ scale: 0.97 }] },
   });
@@ -162,16 +150,13 @@ export default function ControlScreen() {
   const { isDark, theme } = useTheme();
   const { t } = useI18n();
   const styles = useMemo(() => makeStyles(theme, isDark), [theme, isDark]);
-  const { canSendCommands, connectedDevice, disconnectFromBall, isConnected, sendCommandToBall } = useBluetoothSession();
+  const { canSendCommands, connectedDevice, isConnected, sendCommandToBall } = useBluetoothSession();
 
-  const [commandDraft, setCommandDraft] = useState('STATUS?');
-  const [devPanelVisible, setDevPanelVisible] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [sending, setSending] = useState(false);
   const [sleepSending, setSleepSending] = useState(false);
   const [sleepMode, setSleepMode] = useState(false);
   const [volume, setVolume] = useState(57);
-  const [lastCmd, setLastCmd] = useState<string | null>(null);
   const [ballRot, setBallRot] = useState({ x: 0, y: 0 });
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -304,7 +289,6 @@ export default function ControlScreen() {
   })).current;
 
   const deviceReady = isConnected && Boolean(connectedDevice);
-  const cmdEnabled = deviceReady && canSendCommands && !sending;
   const suffix = connectedDevice?.id ? connectedDevice.id.slice(-2).toUpperCase() : '--';
 
   const sendCore = async (cmd: 'ON' | 'OFF') => {
@@ -313,7 +297,6 @@ export default function ControlScreen() {
     try {
       setSending(true);
       await sendCommandToBall(cmd);
-      setLastCmd(cmd);
       return true;
     } catch (e) {
       Alert.alert(t('cmdFailed'), e instanceof Error ? e.message : 'Could not send.');
@@ -326,43 +309,17 @@ export default function ControlScreen() {
     if (sent) setIsPlaying(!isPlaying);
   };
 
-  const sendCustom = async () => {
-    const cmd = commandDraft.trim();
-    if (!cmd) { Alert.alert(t('missingCmd'), t('enterCmdFirst')); return; }
-    if (!cmdEnabled) { Alert.alert(t('notConnected'), t('connectFirst')); return; }
-    try {
-      setSending(true);
-      await sendCommandToBall(cmd);
-      setLastCmd(cmd);
-      Alert.alert(t('sent'), `"${cmd}" dispatched to the ball.`);
-    } catch (e) {
-      Alert.alert(t('failed'), e instanceof Error ? e.message : 'Error.');
-    } finally { setSending(false); }
-  };
-
   const handleSleepModeToggle = async () => {
     const nextSleepMode = !sleepMode;
     if (!deviceReady) { router.replace('/scan' as Href); return; }
     if (!canSendCommands) { Alert.alert(t('sleepUnavailable'), 'The BLE command channel is not ready yet.'); return; }
     try {
       setSleepSending(true);
-      const command = nextSleepMode ? 'SLEEP' : 'WAKE';
-      await sendCommandToBall(command);
+      await sendCommandToBall(nextSleepMode ? 'SLEEP' : 'WAKE');
       setSleepMode(nextSleepMode);
-      setLastCmd(command);
     } catch (e) {
       Alert.alert(t('sleepCmdFailed'), e instanceof Error ? e.message : 'Could not change the device sleep mode.');
     } finally { setSleepSending(false); }
-  };
-
-  const handleDisconnect = async () => {
-    setIsPlaying(false);
-    closeSheet();
-    setDevPanelVisible(false);
-    router.replace('/scan' as Href);
-    try { await disconnectFromBall(); } catch (e) {
-      Alert.alert(t('disconnectFailed'), e instanceof Error ? e.message : 'Error.');
-    }
   };
 
   const outerGlowColor = isDark ? 'rgba(93,24,54,0.24)' : 'rgba(168,85,247,0.10)';
@@ -509,7 +466,7 @@ export default function ControlScreen() {
         <View style={[styles.sheetScroll, styles.sheetContent]}>
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>{t('controls')}</Text>
-            <Text style={styles.sheetSub}>CricTrack v2 · Device {suffix}</Text>
+            <Text style={styles.sheetSub}>VISIOBALL · Device {suffix}</Text>
           </View>
 
           <Pressable
@@ -547,41 +504,6 @@ export default function ControlScreen() {
               <View style={[styles.thumb, sleepMode && styles.thumbOn]} />
             </View>
           </Pressable>
-
-          {devPanelVisible && (
-            <View style={styles.devPanel}>
-              <View style={styles.devActions}>
-                <Pressable onPress={() => { closeSheet(); setDevPanelVisible(false); router.replace('/scan' as Href); }}
-                  style={({ pressed }) => [styles.devBtn, pressed && styles.pressed]}>
-                  <Ionicons name="scan" size={18} color="#22C55E" />
-                  <Text style={styles.devBtnText}>{t('scan')}</Text>
-                </Pressable>
-                <Pressable disabled={!deviceReady} onPress={() => void handleDisconnect()}
-                  style={({ pressed }) => [styles.devBtn, !deviceReady && styles.devBtnDisabled, pressed && styles.pressed]}>
-                  <Ionicons name="power" size={18} color="#22C55E" />
-                  <Text style={styles.devBtnText}>{t('disconnect')}</Text>
-                </Pressable>
-              </View>
-              <Text style={styles.devLabel}>{t('devCommand')}</Text>
-              <View style={styles.cmdRow}>
-                <TextInput
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  editable={!sending}
-                  onChangeText={setCommandDraft}
-                  placeholder="STATUS?"
-                  placeholderTextColor={theme.textSubtle}
-                  style={styles.cmdInput}
-                  value={commandDraft}
-                />
-                <Pressable disabled={!cmdEnabled} onPress={() => void sendCustom()}
-                  style={({ pressed }) => [styles.sendBtn, !cmdEnabled && styles.sendBtnDisabled, pressed && styles.pressed]}>
-                  <Ionicons name="send" size={16} color="#080B14" />
-                </Pressable>
-              </View>
-              {lastCmd && <Text style={styles.lastCmd}>{t('last')} {lastCmd}</Text>}
-            </View>
-          )}
 
           <Text style={styles.footer}>{t('firmwareFooter')}</Text>
         </View>

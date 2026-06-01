@@ -17,6 +17,21 @@ const ADVERTISING_RECOVERY_MS = 1500;
 export const TARGET_BLE_DEVICE_NAME = 'VisioBal';
 export const COMMAND_SERVICE_UUID        = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
 export const COMMAND_CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+
+const ALLOWED_COMMANDS = new Set([
+  'ON', 'OFF', 'SLEEP', 'WAKE', 'PLAY', 'PAUSE', 'NEXT', 'PREV', 'PING',
+  'SONG1', 'SONG2', 'SONG3', 'SONG4', 'SONG5',
+]);
+const ALLOWED_PATTERNS = [
+  /^VOL:(100|[0-9]{1,2})$/,
+  /^FREQ:\d+(\.\d+)?$/,
+];
+
+function validateCommand(command: string): void {
+  if (ALLOWED_COMMANDS.has(command)) return;
+  if (ALLOWED_PATTERNS.some(p => p.test(command))) return;
+  throw new Error(`Command "${command}" is not permitted. Allowed: ON, OFF, SLEEP, WAKE, PLAY, PAUSE, NEXT, PREV, PING, SONG1-5, VOL:<0-100>, FREQ:<hz>`);
+}
 type BleRuntime = typeof import('react-native-ble-plx');
 export type BluetoothSessionSnapshot = {
   connectedDevice: BallDevice | null;
@@ -392,6 +407,7 @@ async function forceDisconnectIfLingering(deviceId: string): Promise<void> {
 async function connectFresh(deviceId: string): Promise<Device> {
   return getBleManager().connectToDevice(deviceId, {
     timeout: 10000,
+    requestMTU: 512,
   });
 }
 
@@ -570,6 +586,7 @@ export async function disconnectFromBall(): Promise<void> {
 }
 
 export async function sendCommandToBall(command: string): Promise<void> {
+  validateCommand(command);
   await requestBluetoothPermissions();
   await ensureBluetoothReady();
 
