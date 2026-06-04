@@ -186,7 +186,8 @@ export default function SoundPage() {
   const skipFwdScale = useRef(new Animated.Value(1)).current;
 
   const currentTrack: Track = TRACKS.find(t => t.id === selectedId) ?? TRACKS[0];
-  const isCurrentLoaded = player.loadedIdx === currentTrack.melodyIdx;
+  const shouldUseLocalPlayer = !isConnected;
+  const isCurrentLoaded = shouldUseLocalPlayer && player.loadedIdx === currentTrack.melodyIdx;
   const elapsed = isCurrentLoaded ? Math.round(player.positionMs / 1000) : 0;
   const totalSeconds = isCurrentLoaded && player.durationMs > 0
     ? Math.round(player.durationMs / 1000)
@@ -194,7 +195,7 @@ export default function SoundPage() {
       parseInt(currentTrack.duration.split(':')[0] ?? '0', 10) * 60;
   const progress = totalSeconds > 0 ? Math.min(elapsed / totalSeconds, 1) : 0;
   const progressPct = `${Math.round(progress * 100)}%` as `${number}%`;
-  const displayIsPlaying = player.isPlaying || player.isLoading;
+  const displayIsPlaying = shouldUseLocalPlayer ? player.isPlaying || player.isLoading : isPlaying;
 
   // Keep a ref so effects can call player methods without re-running
   const playerRef = useRef(player);
@@ -202,6 +203,11 @@ export default function SoundPage() {
 
   // Sync player with intent whenever track or play state changes
   useEffect(() => {
+    if (!shouldUseLocalPlayer) {
+      void playerRef.current.stop();
+      return;
+    }
+
     const { melodyIdx } = currentTrack;
     if (isPlaying) {
       if (playerRef.current.loadedIdx === melodyIdx) {
@@ -212,12 +218,14 @@ export default function SoundPage() {
     } else {
       void playerRef.current.pause();
     }
-  }, [isPlaying, selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isPlaying, selectedId, shouldUseLocalPlayer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync volume to player
   useEffect(() => {
-    void playerRef.current.setVolume(volume / 100);
-  }, [volume]);
+    if (shouldUseLocalPlayer) {
+      void playerRef.current.setVolume(volume / 100);
+    }
+  }, [shouldUseLocalPlayer, volume]);
 
   // Send BLE command when a hardware track is selected while connected
   useEffect(() => {
@@ -237,7 +245,7 @@ export default function SoundPage() {
   }, [canSendCommands, isConnected, sendCommandToBall]);
 
   const togglePlay = () => {
-    if (player.isLoading) return;
+    if (shouldUseLocalPlayer && player.isLoading) return;
     const nextIsPlaying = !isPlaying;
     sendHardwareCommand(nextIsPlaying ? 'PLAY' : 'PAUSE');
     setIsPlaying(nextIsPlaying);
@@ -300,12 +308,6 @@ export default function SoundPage() {
             <View style={styles.trackTexts}>
               <Text style={styles.trackTitle} numberOfLines={1}>{currentTrack.title}</Text>
               <Text style={styles.trackMeta}>{currentTrack.genre} · {currentTrack.duration}</Text>
-              {currentTrack.command && (
-                <View style={styles.hwBadge}>
-                  <View style={styles.hwDot} />
-                  <Text style={styles.hwText}>ON HARDWARE</Text>
-                </View>
-              )}
             </View>
           </View>
 
@@ -339,7 +341,7 @@ export default function SoundPage() {
                 onPressOut={() => pressOut(playScale)}
                 style={styles.playBtn}
               >
-                {player.isLoading
+                {shouldUseLocalPlayer && player.isLoading
                   ? <ActivityIndicator size="small" color="#F9FAFB" />
                   : <Ionicons
                       name={displayIsPlaying ? 'pause' : 'play'}

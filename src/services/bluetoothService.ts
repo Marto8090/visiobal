@@ -585,6 +585,12 @@ export async function disconnectFromBall(): Promise<void> {
   await delay(ADVERTISING_RECOVERY_MS);
 }
 
+export async function clearRememberedBallDevice(): Promise<void> {
+  lastKnownDeviceId = null;
+  verifiedDeviceIds.clear();
+  await AsyncStorage.removeItem(STORAGE_KEYS.LAST_DEVICE_ID);
+}
+
 export async function sendCommandToBall(command: string): Promise<void> {
   validateCommand(command);
   await requestBluetoothPermissions();

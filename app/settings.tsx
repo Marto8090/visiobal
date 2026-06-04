@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { Href } from 'expo-router';
 import { useRouter } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 import type { ReactNode } from 'react';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   Alert,
   Platform,
@@ -16,15 +17,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useAppSettings } from '@/src/context/AppSettingsContext';
 import { useI18n } from '@/src/context/I18nContext';
 import { ThemeColors, useTheme } from '@/src/context/ThemeContext';
+import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 import { LOCALES, Locale } from '@/src/i18n/translations';
-
-const DEFAULT_SETTINGS = {
-  batteryWarnings: true,
-  connectionAlerts: false,
-  pushNotifications: true,
-};
+import { clearRememberedBallDevice } from '@/src/services/bluetoothService';
 
 function makeStyles(theme: ThemeColors) {
   return StyleSheet.create({
@@ -177,20 +175,45 @@ function StaticRow({ label, styles, subtitle }: StaticRowProps) {
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { isDark, theme, toggleTheme } = useTheme();
-  const { locale, setLocale, t } = useI18n();
+  const { isDark, resetTheme, theme, toggleTheme } = useTheme();
+  const { locale, resetLocale, setLocale, t } = useI18n();
+  const { disconnectFromBall, isConnected } = useBluetoothSession();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const appVersion = '1.4.0';
+  const {
+    batteryWarnings,
+    connectionAlerts,
+    pushNotifications,
+    resetNotificationSettings,
+    setBatteryWarnings,
+    setConnectionAlerts,
+    setPushNotifications,
+  } = useAppSettings();
 
-  const [pushNotifications, setPushNotifications] = useState(DEFAULT_SETTINGS.pushNotifications);
-  const [connectionAlerts, setConnectionAlerts] = useState(DEFAULT_SETTINGS.connectionAlerts);
-  const [batteryWarnings, setBatteryWarnings] = useState(DEFAULT_SETTINGS.batteryWarnings);
+  const resetToDefaults = async () => {
+    try {
+      resetNotificationSettings();
+      resetTheme();
+      resetLocale();
 
-  const resetToDefaults = () => {
-    setPushNotifications(DEFAULT_SETTINGS.pushNotifications);
-    setConnectionAlerts(DEFAULT_SETTINGS.connectionAlerts);
-    setBatteryWarnings(DEFAULT_SETTINGS.batteryWarnings);
-    Alert.alert(t('factoryResetDoneTitle'), t('factoryResetDoneMessage'));
+      if (isConnected) {
+        await disconnectFromBall();
+      }
+      await clearRememberedBallDevice();
+
+      await Promise.all([
+        Notifications.cancelAllScheduledNotificationsAsync().catch(() => {}),
+        Notifications.dismissAllNotificationsAsync().catch(() => {}),
+        Notifications.setBadgeCountAsync(0).catch(() => {}),
+        Platform.OS === 'android'
+          ? Notifications.deleteNotificationChannelAsync('connection-alerts').catch(() => {})
+          : Promise.resolve(),
+      ]);
+
+      Alert.alert(t('factoryResetDoneTitle'), t('factoryResetDoneMessage'));
+    } catch (e) {
+      Alert.alert(t('factoryResetTitle'), e instanceof Error ? e.message : 'Could not reset app settings.');
+    }
   };
 
   const confirmFactoryReset = () => {
@@ -199,7 +222,7 @@ export default function SettingsScreen() {
       t('factoryResetMessage'),
       [
         { style: 'cancel', text: t('cancel') },
-        { onPress: resetToDefaults, style: 'destructive', text: t('reset') },
+        { onPress: () => void resetToDefaults(), style: 'destructive', text: t('reset') },
       ]
     );
   };

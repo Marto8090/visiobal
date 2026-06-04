@@ -61,6 +61,7 @@
       ],
       "expo-asset",
       "expo-font",
+      "expo-notifications",
       "expo-web-browser"
     ],
     "experiments": {

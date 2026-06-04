@@ -68,12 +68,14 @@ const light: ThemeColors = {
 
 type ThemeContextType = {
   isDark: boolean;
+  resetTheme: () => void;
   theme: ThemeColors;
   toggleTheme: () => void;
 };
 
 const ThemeContext = createContext<ThemeContextType>({
   isDark: true,
+  resetTheme: () => {},
   theme: dark,
   toggleTheme: () => {},
 });
@@ -95,8 +97,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       return next;
     });
 
+  const resetTheme = () => {
+    setIsDark(true);
+    void AsyncStorage.removeItem(STORAGE_KEYS.THEME);
+  };
+
   return (
-    <ThemeContext.Provider value={{ isDark, theme: isDark ? dark : light, toggleTheme }}>
+    <ThemeContext.Provider value={{ isDark, resetTheme, theme: isDark ? dark : light, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );
