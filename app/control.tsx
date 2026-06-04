@@ -114,6 +114,21 @@ function makeStyles(theme: ThemeColors, isDark: boolean) {
     },
     sheetSleepText: { color: theme.text, fontSize: 15, fontWeight: '800' },
     sheetSleepSub: { color: theme.textMuted, fontSize: 12, fontWeight: '500', marginTop: 2 },
+    disconnectRow: {
+      alignItems: 'center',
+      backgroundColor: 'rgba(239,68,68,0.10)',
+      borderColor: 'rgba(239,68,68,0.28)',
+      borderRadius: 16,
+      borderWidth: 1,
+      flexDirection: 'row',
+      gap: 10,
+      justifyContent: 'center',
+      marginTop: 28,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      width: '100%',
+    },
+    disconnectText: { color: '#EF4444', fontSize: 15, fontWeight: '800' },
     track: { width: 48, height: 28, borderRadius: 14, backgroundColor: theme.tickInactive, padding: 3 },
     trackOn: { backgroundColor: '#A855F7' },
     thumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: theme.textSubtle },
@@ -150,10 +165,11 @@ export default function ControlScreen() {
   const { isDark, theme } = useTheme();
   const { t } = useI18n();
   const styles = useMemo(() => makeStyles(theme, isDark), [theme, isDark]);
-  const { canSendCommands, connectedDevice, isConnected, sendCommandToBall } = useBluetoothSession();
+  const { canSendCommands, connectedDevice, disconnectFromBall, isConnected, sendCommandToBall } = useBluetoothSession();
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [sending, setSending] = useState(false);
+  const [disconnectSending, setDisconnectSending] = useState(false);
   const [sleepSending, setSleepSending] = useState(false);
   const [sleepMode, setSleepMode] = useState(false);
   const [volume, setVolume] = useState(57);
@@ -291,7 +307,7 @@ export default function ControlScreen() {
   const deviceReady = isConnected && Boolean(connectedDevice);
   const suffix = connectedDevice?.id ? connectedDevice.id.slice(-2).toUpperCase() : '--';
 
-  const sendCore = async (cmd: 'ON' | 'OFF') => {
+  const sendTransportCommand = async (cmd: 'PLAY' | 'PAUSE' | 'NEXT' | 'PREV') => {
     if (!deviceReady) { router.replace('/scan' as Href); return false; }
     if (!canSendCommands) { Alert.alert(t('cmdUnavailable'), t('bleNotReady')); return false; }
     try {
@@ -305,8 +321,25 @@ export default function ControlScreen() {
   };
 
   const handlePlay = async () => {
-    const sent = await sendCore(isPlaying ? 'OFF' : 'ON');
+    const sent = await sendTransportCommand(isPlaying ? 'PAUSE' : 'PLAY');
     if (sent) setIsPlaying(!isPlaying);
+  };
+
+  const handleSkipBack = async () => {
+    const sent = await sendTransportCommand('PREV');
+    if (sent) setIsPlaying(true);
+  };
+
+  const handleSkipForward = async () => {
+    const sent = await sendTransportCommand('NEXT');
+    if (sent) setIsPlaying(true);
+  };
+
+  const handleVolumeComplete = (nextVolume: number) => {
+    const roundedVolume = Math.round(nextVolume);
+    setVolume(roundedVolume);
+    if (!deviceReady || !canSendCommands) return;
+    void sendCommandToBall(`VOL:${roundedVolume}`).catch(() => {});
   };
 
   const handleSleepModeToggle = async () => {
@@ -320,6 +353,22 @@ export default function ControlScreen() {
     } catch (e) {
       Alert.alert(t('sleepCmdFailed'), e instanceof Error ? e.message : 'Could not change the device sleep mode.');
     } finally { setSleepSending(false); }
+  };
+
+  const handleDisconnect = async () => {
+    if (!deviceReady) { closeSheet(); router.replace('/scan' as Href); return; }
+    try {
+      setDisconnectSending(true);
+      await disconnectFromBall();
+      setIsPlaying(false);
+      setSleepMode(false);
+      if (sheetOpen) closeSheet();
+      router.replace('/scan' as Href);
+    } catch (e) {
+      Alert.alert(t('disconnectFailed'), e instanceof Error ? e.message : 'Could not disconnect from the device.');
+    } finally {
+      setDisconnectSending(false);
+    }
   };
 
   const outerGlowColor = isDark ? 'rgba(93,24,54,0.24)' : 'rgba(168,85,247,0.10)';
@@ -374,7 +423,14 @@ export default function ControlScreen() {
           <Text style={styles.sectionLabel}>{t('volume')}</Text>
           <Text style={styles.volVal}>{volume}</Text>
         </View>
-        <FrequencySlider minimumValue={0} maximumValue={100} step={10} value={volume} onValueChange={setVolume} />
+        <FrequencySlider
+          minimumValue={0}
+          maximumValue={100}
+          step={10}
+          value={volume}
+          onValueChange={setVolume}
+          onSlidingComplete={handleVolumeComplete}
+        />
         <View style={styles.ticksRow}>
           {VOLUME_STEPS.map(step => (
             <View key={step} style={styles.tickItem}>
@@ -389,7 +445,9 @@ export default function ControlScreen() {
         <View style={styles.transport}>
           <Animated.View style={{ transform: [{ scale: skipBackScale }] }}>
             <Pressable
+              disabled={sending}
               style={styles.ctrlSkipBtn}
+              onPress={() => void handleSkipBack()}
               onPressIn={() => pressIn(skipBackScale)}
               onPressOut={() => pressOut(skipBackScale)}
             >
@@ -414,7 +472,9 @@ export default function ControlScreen() {
 
           <Animated.View style={{ transform: [{ scale: skipFwdScale }] }}>
             <Pressable
+              disabled={sending}
               style={styles.ctrlSkipBtn}
+              onPress={() => void handleSkipForward()}
               onPressIn={() => pressIn(skipFwdScale)}
               onPressOut={() => pressOut(skipFwdScale)}
             >
@@ -422,6 +482,26 @@ export default function ControlScreen() {
             </Pressable>
           </Animated.View>
         </View>
+
+        {deviceReady && (
+          <Pressable
+            disabled={disconnectSending}
+            onPress={() => void handleDisconnect()}
+            style={({ pressed }) => [
+              styles.disconnectRow,
+              pressed && styles.pressed,
+              disconnectSending && styles.disabledPressable,
+            ]}
+          >
+            {disconnectSending
+              ? <ActivityIndicator color="#EF4444" />
+              : <Ionicons name="unlink" size={18} color="#EF4444" />
+            }
+            <Text style={styles.disconnectText}>
+              {disconnectSending ? t('disconnecting') : t('disconnect')}
+            </Text>
+          </Pressable>
+        )}
 
         {!deviceReady && (
           <Pressable onPress={() => router.replace('/scan' as Href)} style={({ pressed }) => [styles.scanBtn, pressed && styles.pressed]}>

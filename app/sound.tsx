@@ -22,9 +22,9 @@ import { MelodyIndex, useMelodyPlayer } from '@/src/hooks/useMelodyPlayer';
 const TRACKS = [
   { id: '1', title: 'C Major Journey', duration: '0:03', genre: 'Ambient',    command: 'SONG1', melodyIdx: 0 as MelodyIndex },
   { id: '2', title: 'E Minor Groove',  duration: '0:02', genre: 'Electronic', command: 'SONG2', melodyIdx: 1 as MelodyIndex },
-  { id: '3', title: 'Zen State',       duration: '0:05', genre: 'Meditation', command: null,    melodyIdx: 2 as MelodyIndex },
-  { id: '4', title: 'Ocean Waves',     duration: '0:04', genre: 'Nature',     command: null,    melodyIdx: 3 as MelodyIndex },
-  { id: '5', title: 'Ambient Pulse',   duration: '0:03', genre: 'Electronic', command: null,    melodyIdx: 4 as MelodyIndex },
+  { id: '3', title: 'Zen State',       duration: '0:05', genre: 'Meditation', command: 'SONG3', melodyIdx: 2 as MelodyIndex },
+  { id: '4', title: 'Ocean Waves',     duration: '0:04', genre: 'Nature',     command: 'SONG4', melodyIdx: 3 as MelodyIndex },
+  { id: '5', title: 'Ambient Pulse',   duration: '0:03', genre: 'Electronic', command: 'SONG5', melodyIdx: 4 as MelodyIndex },
 ] as const;
 
 type Track = typeof TRACKS[number];
@@ -231,6 +231,24 @@ export default function SoundPage() {
   const pressOut = useCallback((scale: Animated.Value) =>
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }).start(), []);
 
+  const sendHardwareCommand = useCallback((command: string) => {
+    if (!isConnected || !canSendCommands) return;
+    void sendCommandToBall(command).catch(() => {});
+  }, [canSendCommands, isConnected, sendCommandToBall]);
+
+  const togglePlay = () => {
+    if (player.isLoading) return;
+    const nextIsPlaying = !isPlaying;
+    sendHardwareCommand(nextIsPlaying ? 'PLAY' : 'PAUSE');
+    setIsPlaying(nextIsPlaying);
+  };
+
+  const handleVolumeComplete = (nextVolume: number) => {
+    const roundedVolume = Math.round(nextVolume);
+    setVolume(roundedVolume);
+    sendHardwareCommand(`VOL:${roundedVolume}`);
+  };
+
   const skipNext = () => {
     const i = TRACKS.findIndex(t => t.id === selectedId);
     setSelectedId(TRACKS[(i + 1) % TRACKS.length].id);
@@ -240,6 +258,8 @@ export default function SoundPage() {
   const skipPrev = () => {
     if (elapsed > 3) {
       void playerRef.current.play(currentTrack.melodyIdx);
+      sendHardwareCommand(currentTrack.command);
+      setIsPlaying(true);
     } else {
       const i = TRACKS.findIndex(t => t.id === selectedId);
       setSelectedId(TRACKS[(i - 1 + TRACKS.length) % TRACKS.length].id);
@@ -314,7 +334,7 @@ export default function SoundPage() {
 
             <Animated.View style={{ transform: [{ scale: playScale }] }}>
               <Pressable
-                onPress={() => !player.isLoading && setIsPlaying(v => !v)}
+                onPress={togglePlay}
                 onPressIn={() => pressIn(playScale)}
                 onPressOut={() => pressOut(playScale)}
                 style={styles.playBtn}
@@ -354,7 +374,7 @@ export default function SoundPage() {
               maximumValue={100}
               step={1}
               onValueChange={setVolume}
-              onSlidingComplete={setVolume}
+              onSlidingComplete={handleVolumeComplete}
             />
             <View style={styles.ticksRow}>
               {VOLUME_STEPS.map(step => (
