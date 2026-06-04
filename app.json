@@ -36,9 +36,13 @@
       [
         "expo-splash-screen",
         {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 1,
           "resizeMode": "contain",
           "backgroundColor": "#000000",
           "dark": {
+            "image": "./assets/images/splash-icon.png",
+            "imageWidth": 1,
             "backgroundColor": "#000000"
           }
         }
@@ -54,7 +58,10 @@
         {
           "recordAudioAndroid": false
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
