@@ -91,18 +91,6 @@ function makeStyles(theme: ThemeColors, isDark: boolean) {
     sheetHeader: { marginBottom: 18 },
     sheetTitle: { color: theme.text, fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
     sheetSub: { color: theme.textMuted, fontSize: 13, fontWeight: '500', marginTop: 4 },
-    deviceCard: {
-      flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card,
-      borderRadius: 18, paddingHorizontal: 14, paddingVertical: 13, marginBottom: 18,
-      borderWidth: 1, borderColor: theme.border,
-    },
-    deviceBall: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-    deviceBallLine: { width: 48, height: 1, backgroundColor: 'rgba(255,255,255,0.3)', transform: [{ rotate: '6deg' }] },
-    deviceCardText: { flex: 1, marginLeft: 13 },
-    deviceCardTitle: { color: theme.text, fontSize: 16, fontWeight: '800' },
-    deviceCardSub: { color: theme.textMuted, fontSize: 12, fontWeight: '500', marginTop: 2 },
-    deviceStatus: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#22C55E' },
-    deviceStatusOff: { backgroundColor: '#F59E0B' },
     tilesGrid: { flexDirection: 'row', gap: 10, marginBottom: 20 },
     tile: { flex: 1, backgroundColor: theme.card, borderRadius: 20, padding: 14, paddingBottom: 16, borderWidth: 1, gap: 12 },
     tileIconWrap: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
@@ -409,7 +397,14 @@ export default function ControlScreen() {
 
       <View style={styles.stageSeparator} />
 
-      <View style={[styles.content, { paddingBottom: PEEK_HEIGHT + SAFE_BOTTOM + 12 }]}>
+      <LinearGradient
+        colors={isDark
+          ? ['transparent', 'transparent']
+          : ['#EAE4FF', '#FFF2FA']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.content, { paddingBottom: PEEK_HEIGHT + SAFE_BOTTOM + 12 }]}
+      >
 
         <View style={styles.statusRow}>
           <View style={[styles.statusChip, !deviceReady && styles.statusChipOff]}>
@@ -510,7 +505,7 @@ export default function ControlScreen() {
             <Text style={styles.scanBtnText}>{t('scanForBall')}</Text>
           </Pressable>
         )}
-      </View>
+      </LinearGradient>
 
       {sheetOpen && <Pressable style={styles.backdrop} onPress={closeSheet} />}
 
@@ -551,20 +546,6 @@ export default function ControlScreen() {
             <Text style={styles.sheetTitle}>{t('controls')}</Text>
             <Text style={styles.sheetSub}>VISIOBALL · Device {suffix}</Text>
           </View>
-
-          <Pressable
-            onPress={() => { if (!deviceReady) { closeSheet(); router.replace('/scan' as Href); } }}
-            style={({ pressed }) => [styles.deviceCard, pressed && styles.pressed]}
-          >
-            <View style={styles.deviceBall}>
-              <View style={styles.deviceBallLine} />
-            </View>
-            <View style={styles.deviceCardText}>
-              <Text style={styles.deviceCardTitle}>VisioBall</Text>
-              <Text style={styles.deviceCardSub}>{deviceReady ? t('connectedBattery') : t('disconnectedTapScan')}</Text>
-            </View>
-            <View style={[styles.deviceStatus, !deviceReady && styles.deviceStatusOff]} />
-          </Pressable>
 
           <View style={styles.tilesGrid}>
             <Tile color="#A855F7" icon="musical-notes" sub={t('audioSub')} styles={styles}
