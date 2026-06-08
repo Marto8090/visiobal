@@ -19,7 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FrequencySlider } from '@/src/components/FrequencySlider';
 import { BackgroundDust, TexturedVisioball } from '@/src/components/VisioballModel';
 import { useI18n } from '@/src/context/I18nContext';
-import { usePlayer } from '@/src/context/PlayerContext';
+import { TRACKS, usePlayerState } from '@/src/context/PlayerContext';
 import { ThemeColors, useTheme } from '@/src/context/ThemeContext';
 import { configureThreeNativeRenderer } from '@/src/utils/configureThreeNativeRenderer';
 
@@ -164,7 +164,11 @@ export default function LandingPage() {
   const { isDark, theme } = useTheme();
   const { t } = useI18n();
   const styles = useMemo(() => makeStyles(theme), [theme]);
-  const { isPlaying, currentTrack, togglePlay, skipNext, skipPrev } = usePlayer();
+  const { isPlaying, trackIndex, setIsPlaying, setTrackIndex } = usePlayerState();
+  const currentTrack = TRACKS[trackIndex] ?? TRACKS[0];
+  const togglePlay = () => setIsPlaying(v => !v);
+  const skipNext = () => setTrackIndex(i => (i + 1) % TRACKS.length);
+  const skipPrev = () => setTrackIndex(i => (i - 1 + TRACKS.length) % TRACKS.length);
 
   const [showOptions, setShowOptions] = useState(false);
   const [speed, setSpeed] = useState(12);
