@@ -396,7 +396,14 @@ export default function ControlScreen() {
 
       <View style={styles.stageSeparator} />
 
-      <View style={[styles.content, { paddingBottom: PEEK_HEIGHT + SAFE_BOTTOM + 12 }]}>
+      <LinearGradient
+        colors={isDark
+          ? ['transparent', 'transparent']
+          : ['#EAE4FF', '#FFF2FA']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.content, { paddingBottom: PEEK_HEIGHT + SAFE_BOTTOM + 12 }]}
+      >
 
         <View style={styles.statusRow}>
           <View style={[styles.statusChip, !deviceReady && styles.statusChipOff]}>
@@ -497,7 +504,7 @@ export default function ControlScreen() {
             <Text style={styles.scanBtnText}>{t('scanForBall')}</Text>
           </Pressable>
         )}
-      </View>
+      </LinearGradient>
 
       {sheetOpen && <Pressable style={styles.backdrop} onPress={closeSheet} />}
 
