@@ -15,19 +15,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FrequencySlider } from '@/src/components/FrequencySlider';
 import { useI18n } from '@/src/context/I18nContext';
+import { TRACKS, Track, usePlayerState } from '@/src/context/PlayerContext';
 import { ThemeColors, useTheme } from '@/src/context/ThemeContext';
 import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
-import { MelodyIndex, useMelodyPlayer } from '@/src/hooks/useMelodyPlayer';
-
-const TRACKS = [
-  { id: '1', title: 'C Major Journey', duration: '0:03', genre: 'Ambient',    command: 'SONG1', melodyIdx: 0 as MelodyIndex },
-  { id: '2', title: 'E Minor Groove',  duration: '0:02', genre: 'Electronic', command: 'SONG2', melodyIdx: 1 as MelodyIndex },
-  { id: '3', title: 'Zen State',       duration: '0:05', genre: 'Meditation', command: 'SONG3', melodyIdx: 2 as MelodyIndex },
-  { id: '4', title: 'Ocean Waves',     duration: '0:04', genre: 'Nature',     command: 'SONG4', melodyIdx: 3 as MelodyIndex },
-  { id: '5', title: 'Ambient Pulse',   duration: '0:03', genre: 'Electronic', command: 'SONG5', melodyIdx: 4 as MelodyIndex },
-] as const;
-
-type Track = typeof TRACKS[number];
+import { useMelodyPlayer } from '@/src/hooks/useMelodyPlayer';
 
 const VOLUME_STEPS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 
@@ -177,15 +168,15 @@ export default function SoundPage() {
   const { isConnected, canSendCommands, sendCommandToBall } = useBluetoothSession();
   const player = useMelodyPlayer();
 
-  const [selectedId, setSelectedId] = useState<Track['id']>(TRACKS[0].id);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const { isPlaying, trackIndex, setIsPlaying, setTrackIndex } = usePlayerState();
+  const currentTrack: Track = TRACKS[trackIndex] ?? TRACKS[0];
+
   const [volume, setVolume] = useState(50);
 
   const playScale = useRef(new Animated.Value(1)).current;
   const skipBackScale = useRef(new Animated.Value(1)).current;
   const skipFwdScale = useRef(new Animated.Value(1)).current;
 
-  const currentTrack: Track = TRACKS.find(t => t.id === selectedId) ?? TRACKS[0];
   const shouldUseLocalPlayer = !isConnected;
   const isCurrentLoaded = shouldUseLocalPlayer && player.loadedIdx === currentTrack.melodyIdx;
   const elapsed = isCurrentLoaded ? Math.round(player.positionMs / 1000) : 0;
@@ -218,7 +209,7 @@ export default function SoundPage() {
     } else {
       void playerRef.current.pause();
     }
-  }, [isPlaying, selectedId, shouldUseLocalPlayer]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isPlaying, trackIndex, shouldUseLocalPlayer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync volume to player
   useEffect(() => {
@@ -232,7 +223,7 @@ export default function SoundPage() {
     if (currentTrack.command && isConnected && canSendCommands) {
       void sendCommandToBall(currentTrack.command).catch(() => {});
     }
-  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [trackIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pressIn = useCallback((scale: Animated.Value) =>
     Animated.spring(scale, { toValue: 1.22, useNativeDriver: true, tension: 300, friction: 8 }).start(), []);
@@ -258,8 +249,7 @@ export default function SoundPage() {
   };
 
   const skipNext = () => {
-    const i = TRACKS.findIndex(t => t.id === selectedId);
-    setSelectedId(TRACKS[(i + 1) % TRACKS.length].id);
+    setTrackIndex((trackIndex + 1) % TRACKS.length);
     setIsPlaying(true);
   };
 
@@ -269,8 +259,7 @@ export default function SoundPage() {
       sendHardwareCommand(currentTrack.command);
       setIsPlaying(true);
     } else {
-      const i = TRACKS.findIndex(t => t.id === selectedId);
-      setSelectedId(TRACKS[(i - 1 + TRACKS.length) % TRACKS.length].id);
+      setTrackIndex((trackIndex - 1 + TRACKS.length) % TRACKS.length);
       setIsPlaying(true);
     }
   };
@@ -400,10 +389,10 @@ export default function SoundPage() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
           renderItem={({ item, index }) => {
-            const active = item.id === selectedId;
+            const active = index === trackIndex;
             return (
               <Pressable
-                onPress={() => { setSelectedId(item.id); setIsPlaying(true); }}
+                onPress={() => { setTrackIndex(index); setIsPlaying(true); }}
                 style={({ pressed }) => [
                   styles.trackRow,
                   active && styles.trackRowActive,

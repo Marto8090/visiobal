@@ -24,6 +24,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { FrequencySlider } from '@/src/components/FrequencySlider';
 import { BackgroundDust, TexturedVisioball } from '@/src/components/VisioballModel';
 import { useI18n } from '@/src/context/I18nContext';
+import { usePlayerState } from '@/src/context/PlayerContext';
 import { ThemeColors, useTheme } from '@/src/context/ThemeContext';
 import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 import { configureThreeNativeRenderer } from '@/src/utils/configureThreeNativeRenderer';
@@ -169,8 +170,8 @@ export default function ControlScreen() {
   const { t } = useI18n();
   const styles = useMemo(() => makeStyles(theme, isDark), [theme, isDark]);
   const { canSendCommands, connectedDevice, disconnectFromBall, isConnected, sendCommandToBall } = useBluetoothSession();
+  const { isPlaying, setIsPlaying } = usePlayerState();
 
-  const [isPlaying, setIsPlaying] = useState(false);
   const [sending, setSending] = useState(false);
   const [disconnectSending, setDisconnectSending] = useState(false);
   const [sleepSending, setSleepSending] = useState(false);
@@ -326,7 +327,7 @@ export default function ControlScreen() {
 
   const handlePlay = async () => {
     const sent = await sendTransportCommand(isPlaying ? 'PAUSE' : 'PLAY');
-    if (sent) setIsPlaying(!isPlaying);
+    if (sent) setIsPlaying(v => !v);
   };
 
   const handleSkipBack = async () => {
@@ -417,9 +418,7 @@ export default function ControlScreen() {
       <View style={styles.stageSeparator} />
 
       <LinearGradient
-        colors={isDark
-          ? ['transparent', 'transparent']
-          : ['#EAE4FF', '#FFF2FA']}
+        colors={isDark ? ['transparent', 'transparent'] : ['#EAE4FF', '#FFF2FA']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.content, { paddingBottom: PEEK_HEIGHT + SAFE_BOTTOM + 12 }]}

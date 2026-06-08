@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FrequencySlider } from '@/src/components/FrequencySlider';
 import { BackgroundDust, TexturedVisioball } from '@/src/components/VisioballModel';
 import { useI18n } from '@/src/context/I18nContext';
+import { TRACKS, usePlayerState } from '@/src/context/PlayerContext';
 import { ThemeColors, useTheme } from '@/src/context/ThemeContext';
 import { configureThreeNativeRenderer } from '@/src/utils/configureThreeNativeRenderer';
 
@@ -32,14 +33,6 @@ const MOTOR_KEYS: Record<MotorMode, string> = { Gentle: 'motorGentle', Dynamic: 
 const LIGHT_MODES = ['Constant', 'Breathing', 'Heartbeat'] as const;
 type LightMode = typeof LIGHT_MODES[number];
 const LIGHT_KEYS: Record<LightMode, string> = { Constant: 'lightConstant', Breathing: 'lightBreathing', Heartbeat: 'lightHeartbeat' };
-
-const TRACKS = [
-  { title: 'Lora — Deep Focus', genre: 'Ambient', duration: '4:05' },
-  { title: 'Calm River Flow', genre: 'Nature', duration: '3:42' },
-  { title: 'Zen State', genre: 'Meditation', duration: '5:18' },
-  { title: 'Ocean Waves', genre: 'Nature', duration: '6:01' },
-  { title: 'Ambient Pulse', genre: 'Electronic', duration: '4:33' },
-];
 
 function makeStyles(theme: ThemeColors) {
   return StyleSheet.create({
@@ -171,15 +164,18 @@ export default function LandingPage() {
   const { isDark, theme } = useTheme();
   const { t } = useI18n();
   const styles = useMemo(() => makeStyles(theme), [theme]);
+  const { isPlaying, trackIndex, setIsPlaying, setTrackIndex } = usePlayerState();
+  const currentTrack = TRACKS[trackIndex] ?? TRACKS[0];
+  const togglePlay = () => setIsPlaying(v => !v);
+  const skipNext = () => setTrackIndex(i => (i + 1) % TRACKS.length);
+  const skipPrev = () => setTrackIndex(i => (i - 1 + TRACKS.length) % TRACKS.length);
 
   const [showOptions, setShowOptions] = useState(false);
   const [speed, setSpeed] = useState(12);
   const [interval, setIntervalVal] = useState(15);
   const [motorMode, setMotorMode] = useState<MotorMode>('Gentle');
   const [lightMode, setLightMode] = useState<LightMode>('Constant');
-  const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(50);
-  const [trackIndex, setTrackIndex] = useState(0);
 
   const playScale = useRef(new Animated.Value(1)).current;
   const skipBackScale = useRef(new Animated.Value(1)).current;
@@ -202,10 +198,6 @@ export default function LandingPage() {
     loop.start();
     return () => loop.stop();
   }, [isPlaying, livePulse]);
-
-  const skipNext = () => { setTrackIndex(i => (i + 1) % TRACKS.length); };
-  const skipPrev = () => { setTrackIndex(i => (i - 1 + TRACKS.length) % TRACKS.length); };
-  const currentTrack = TRACKS[trackIndex];
 
   const outerGlowColor = isDark ? 'rgba(93,24,54,0.24)' : 'rgba(168,85,247,0.10)';
   const midGlowColor = isDark ? 'rgba(143,32,62,0.22)' : 'rgba(168,85,247,0.07)';
@@ -284,7 +276,7 @@ export default function LandingPage() {
 
                 <Animated.View style={{ transform: [{ scale: playScale }] }}>
                   <Pressable
-                    onPress={() => setIsPlaying(v => !v)}
+                    onPress={togglePlay}
                     onPressIn={() => pressIn(playScale)}
                     onPressOut={() => pressOut(playScale)}
                     style={styles.playBtn}
