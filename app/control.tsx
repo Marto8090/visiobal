@@ -36,6 +36,18 @@ const SHEET_HEIGHT = height * 0.58 - CONTROLS_MENU_HEIGHT_OFFSET;
 
 function clamp(v: number, lo: number, hi: number) { return Math.min(Math.max(v, lo), hi); }
 
+function batteryColor(level: number) {
+  if (level >= 60) return '#22C55E';
+  if (level >= 30) return '#F59E0B';
+  return '#DC2626';
+}
+
+function batteryIconName(level: number): keyof typeof Ionicons.glyphMap {
+  if (level >= 60) return 'battery-full-outline';
+  if (level >= 30) return 'battery-half-outline';
+  return 'battery-dead-outline';
+}
+
 function makeStyles(theme: ThemeColors, isDark: boolean) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: theme.bgDeep },
@@ -125,6 +137,8 @@ function makeStyles(theme: ThemeColors, isDark: boolean) {
     disabledPressable: { opacity: 0.55 },
     footer: { color: theme.textSubtle, fontSize: 12, fontWeight: '600', textAlign: 'center', marginTop: 20 },
     pressed: { opacity: 0.75, transform: [{ scale: 0.97 }] },
+    batteryBadge: { position: 'absolute', bottom: 10, right: 14, flexDirection: 'row', alignItems: 'center', gap: 4 },
+    batteryText: { fontSize: 12, fontWeight: '800' },
   });
 }
 
@@ -162,6 +176,7 @@ export default function ControlScreen() {
   const [sleepSending, setSleepSending] = useState(false);
   const [sleepMode, setSleepMode] = useState(false);
   const [volume, setVolume] = useState(57);
+  const [batteryLevel] = useState(0);
   const [ballRot, setBallRot] = useState({ x: 0, y: 0 });
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -392,6 +407,10 @@ export default function ControlScreen() {
               />
             </Canvas>
           </Suspense>
+        </View>
+        <View style={styles.batteryBadge}>
+          <Ionicons name={batteryIconName(batteryLevel)} size={15} color={batteryColor(batteryLevel)} />
+          <Text style={[styles.batteryText, { color: batteryColor(batteryLevel) }]}>{batteryLevel}%</Text>
         </View>
       </View>
 
