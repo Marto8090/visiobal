@@ -32,7 +32,7 @@ const { width, height } = Dimensions.get('window');
 const VOLUME_STEPS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 const PEEK_HEIGHT = 43;
 const CONTROLS_MENU_HEIGHT_OFFSET = 1;
-const SHEET_HEIGHT = height * 0.60 - CONTROLS_MENU_HEIGHT_OFFSET;
+const SHEET_HEIGHT = height * 0.58 - CONTROLS_MENU_HEIGHT_OFFSET;
 
 function clamp(v: number, lo: number, hi: number) { return Math.min(Math.max(v, lo), hi); }
 
@@ -83,6 +83,7 @@ function makeStyles(theme: ThemeColors, isDark: boolean) {
     peekCenter: { flex: 1, alignItems: 'center', gap: 6 },
     handleBar: { width: 44, height: 4, borderRadius: 2, backgroundColor: theme.handleBar },
     peekLabel: { color: theme.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+    peekDotSlot: { width: 36, height: 36, alignItems: 'flex-end', justifyContent: 'center' },
     peekDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.bgDeep },
     peekDotOpen: { backgroundColor: '#A855F7' },
     sheetScroll: { flex: 1 },
@@ -539,7 +540,9 @@ export default function ControlScreen() {
               <Text style={styles.peekLabel}>{sheetOpen ? t('closeMenu') : t('quickMenu')}</Text>
             </Pressable>
 
-            <View style={[styles.peekDot, sheetOpen && styles.peekDotOpen]} />
+            <View style={styles.peekDotSlot}>
+              <View style={[styles.peekDot, sheetOpen && styles.peekDotOpen]} />
+            </View>
           </View>
         </View>
 
@@ -569,7 +572,7 @@ export default function ControlScreen() {
             <Tile color="#60A5FA" icon="locate" sub={t('locateSub')} styles={styles}
               title={t('locate')} onPress={() => { closeSheet(); router.push('/radar' as Href); }} />
             <Tile color="#F472B6" icon="settings-sharp" sub={t('settingsSub')} styles={styles}
-              title={t('appSettings')} onPress={() => { closeSheet(); router.push('/settings' as Href); }} />
+              title={t('Settings')} onPress={() => { closeSheet(); router.push('/settings' as Href); }} />
           </View>
 
           <Pressable
