@@ -32,7 +32,7 @@ const { width, height } = Dimensions.get('window');
 const VOLUME_STEPS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 const PEEK_HEIGHT = 43;
 const CONTROLS_MENU_HEIGHT_OFFSET = 1;
-const SHEET_HEIGHT = height * 0.58 - CONTROLS_MENU_HEIGHT_OFFSET;
+const SHEET_HEIGHT = height * 0.525 - CONTROLS_MENU_HEIGHT_OFFSET;
 
 function clamp(v: number, lo: number, hi: number) { return Math.min(Math.max(v, lo), hi); }
 
