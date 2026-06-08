@@ -1,5 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { LayoutChangeEvent, PanResponder, PanResponderGestureState, StyleSheet, View } from 'react-native';
+import {
+  LayoutChangeEvent,
+  PanResponder,
+  PanResponderGestureState,
+  StyleSheet,
+  View,
+} from 'react-native';
 
 type FrequencySliderProps = {
   disabled?: boolean;
@@ -12,6 +18,9 @@ type FrequencySliderProps = {
 };
 
 const THUMB_SIZE = 24;
+const TAP_MOVE_THRESHOLD = 5;
+const HORIZONTAL_DRAG_THRESHOLD = 3;
+const VERTICAL_IGNORE_THRESHOLD = 8;
 
 function clamp(value: number, minimumValue: number, maximumValue: number) {
   return Math.min(Math.max(value, minimumValue), maximumValue);
@@ -41,70 +50,149 @@ export function FrequencySlider({
   const [trackWidth, setTrackWidth] = useState(0);
   const [dragRatio, setDragRatio] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const dragActive = useRef(false);
+  const gestureIgnored = useRef(false);
   const gestureStartX = useRef(0);
   const lastPositionX = useRef(0);
   const lastEmittedValue = useRef<number | null>(null);
   const boundedValue = clamp(value, minimumValue, maximumValue);
   const valueRange = Math.max(maximumValue - minimumValue, step);
+  const configRef = useRef({
+    disabled,
+    maximumValue,
+    minimumValue,
+    step,
+    trackWidth,
+    valueRange,
+  });
+  const onSlidingCompleteRef = useRef(onSlidingComplete);
+  const onValueChangeRef = useRef(onValueChange);
   const ratio = clamp((boundedValue - minimumValue) / valueRange, 0, 1);
   const visualRatio = isDragging ? dragRatio : ratio;
   const thumbLeft = trackWidth
     ? clamp(visualRatio * trackWidth - THUMB_SIZE / 2, 0, Math.max(trackWidth - THUMB_SIZE, 0))
     : 0;
 
+  configRef.current = {
+    disabled,
+    maximumValue,
+    minimumValue,
+    step,
+    trackWidth,
+    valueRange,
+  };
+  onSlidingCompleteRef.current = onSlidingComplete;
+  onValueChangeRef.current = onValueChange;
+
   const updateValueFromPosition = useCallback((positionX: number, complete: boolean) => {
-    if (!trackWidth || disabled) {
+    const config = configRef.current;
+
+    if (!config.trackWidth || config.disabled) {
       return;
     }
 
-    const boundedPosition = clamp(positionX, 0, trackWidth);
+    const boundedPosition = clamp(positionX, 0, config.trackWidth);
     lastPositionX.current = boundedPosition;
-    setDragRatio(boundedPosition / trackWidth);
+    setDragRatio(boundedPosition / config.trackWidth);
 
-    const rawValue = minimumValue + (boundedPosition / trackWidth) * valueRange;
+    const rawValue = config.minimumValue + (boundedPosition / config.trackWidth) * config.valueRange;
     const steppedValue = clamp(
-      snapToStep(rawValue, minimumValue, step),
-      minimumValue,
-      maximumValue
+      snapToStep(rawValue, config.minimumValue, config.step),
+      config.minimumValue,
+      config.maximumValue
     );
-    const nextValue = roundSliderValue(steppedValue, step);
+    const nextValue = roundSliderValue(steppedValue, config.step);
 
     if (nextValue !== lastEmittedValue.current) {
       lastEmittedValue.current = nextValue;
-      onValueChange?.(nextValue);
+      onValueChangeRef.current?.(nextValue);
     }
 
     if (complete) {
-      onSlidingComplete?.(nextValue);
+      onSlidingCompleteRef.current?.(nextValue);
     }
-  }, [disabled, maximumValue, minimumValue, onSlidingComplete, onValueChange, step, trackWidth, valueRange]);
+  }, []);
+
+  const resetGesture = useCallback(() => {
+    dragActive.current = false;
+    gestureIgnored.current = false;
+    setIsDragging(false);
+  }, []);
 
   const updateValueFromGesture = useCallback((gestureState: PanResponderGestureState, complete: boolean) => {
-    const nextPositionX = complete ? lastPositionX.current : gestureStartX.current + gestureState.dx;
-    updateValueFromPosition(nextPositionX, complete);
+    updateValueFromPosition(gestureStartX.current + gestureState.dx, complete);
   }, [updateValueFromPosition]);
 
+  const handleGestureMove = useCallback((gestureState: PanResponderGestureState) => {
+    if (gestureIgnored.current) {
+      return;
+    }
+
+    const absDx = Math.abs(gestureState.dx);
+    const absDy = Math.abs(gestureState.dy);
+
+    if (!dragActive.current && absDy > VERTICAL_IGNORE_THRESHOLD && absDy > absDx * 1.2) {
+      gestureIgnored.current = true;
+      resetGesture();
+      return;
+    }
+
+    if (!dragActive.current && absDx > HORIZONTAL_DRAG_THRESHOLD && absDx >= absDy) {
+      dragActive.current = true;
+      setIsDragging(true);
+    }
+
+    if (dragActive.current) {
+      updateValueFromGesture(gestureState, false);
+    }
+  }, [resetGesture, updateValueFromGesture]);
+
+  const handleGestureEnd = useCallback((gestureState: PanResponderGestureState) => {
+    if (gestureIgnored.current) {
+      resetGesture();
+      return;
+    }
+
+    const absDx = Math.abs(gestureState.dx);
+    const absDy = Math.abs(gestureState.dy);
+    const wasTap = absDx <= TAP_MOVE_THRESHOLD && absDy <= TAP_MOVE_THRESHOLD;
+
+    if (dragActive.current) {
+      updateValueFromGesture(gestureState, true);
+    } else if (wasTap) {
+      updateValueFromPosition(gestureStartX.current, true);
+    }
+
+    resetGesture();
+  }, [resetGesture, updateValueFromGesture, updateValueFromPosition]);
+
   const panResponder = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: () => !disabled,
+    onMoveShouldSetPanResponder: () => !configRef.current.disabled,
+    onMoveShouldSetPanResponderCapture: () => !configRef.current.disabled,
     onPanResponderGrant: (event) => {
       lastEmittedValue.current = null;
-      setIsDragging(true);
+      dragActive.current = false;
+      gestureIgnored.current = false;
       gestureStartX.current = event.nativeEvent.locationX;
-      updateValueFromPosition(gestureStartX.current, false);
+      lastPositionX.current = event.nativeEvent.locationX;
     },
     onPanResponderMove: (_event, gestureState) => {
-      updateValueFromGesture(gestureState, false);
+      handleGestureMove(gestureState);
     },
     onPanResponderRelease: (_event, gestureState) => {
-      updateValueFromGesture(gestureState, true);
-      setIsDragging(false);
+      handleGestureEnd(gestureState);
     },
-    onPanResponderTerminate: (_event, gestureState) => {
-      updateValueFromGesture(gestureState, true);
-      setIsDragging(false);
+    onPanResponderTerminate: () => {
+      if (dragActive.current) {
+        updateValueFromPosition(lastPositionX.current, true);
+      }
+      resetGesture();
     },
-    onStartShouldSetPanResponder: () => !disabled,
-  }), [disabled, updateValueFromGesture, updateValueFromPosition]);
+    onPanResponderTerminationRequest: () => !dragActive.current,
+    onShouldBlockNativeResponder: () => true,
+    onStartShouldSetPanResponder: () => !configRef.current.disabled,
+    onStartShouldSetPanResponderCapture: () => !configRef.current.disabled,
+  }), [handleGestureEnd, handleGestureMove, resetGesture, updateValueFromPosition]);
 
   return (
     <View

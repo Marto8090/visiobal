@@ -422,7 +422,7 @@ export default function ControlScreen() {
         <FrequencySlider
           minimumValue={0}
           maximumValue={100}
-          step={10}
+          step={5}
           value={volume}
           onValueChange={setVolume}
           onSlidingComplete={handleVolumeComplete}
