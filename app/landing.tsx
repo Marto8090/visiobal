@@ -8,6 +8,7 @@ import {
   Animated,
   Dimensions,
   Modal,
+  PanResponder,
   Pressable,
   StatusBar,
   StyleSheet,
@@ -33,6 +34,10 @@ const MOTOR_KEYS: Record<MotorMode, string> = { Gentle: 'motorGentle', Dynamic: 
 const LIGHT_MODES = ['Constant', 'Breathing', 'Heartbeat'] as const;
 type LightMode = typeof LIGHT_MODES[number];
 const LIGHT_KEYS: Record<LightMode, string> = { Constant: 'lightConstant', Breathing: 'lightBreathing', Heartbeat: 'lightHeartbeat' };
+
+function clamp(value: number, minimumValue: number, maximumValue: number) {
+  return Math.min(Math.max(value, minimumValue), maximumValue);
+}
 
 function makeStyles(theme: ThemeColors) {
   return StyleSheet.create({
@@ -181,11 +186,26 @@ export default function LandingPage() {
   const skipBackScale = useRef(new Animated.Value(1)).current;
   const skipFwdScale = useRef(new Animated.Value(1)).current;
   const livePulse = useRef(new Animated.Value(1)).current;
+  const ballRotRef = useRef({ x: 0.12, y: 0.2 });
+  const panStartRef = useRef({ x: 0.12, y: 0.2 });
 
   const pressIn = (scale: Animated.Value) =>
     Animated.spring(scale, { toValue: 1.22, useNativeDriver: true, tension: 300, friction: 8 }).start();
   const pressOut = (scale: Animated.Value) =>
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }).start();
+
+  const ballPan = useRef(PanResponder.create({
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 4 || Math.abs(g.dy) > 4,
+    onPanResponderGrant: () => { panStartRef.current = ballRotRef.current; },
+    onPanResponderMove: (_, g) => {
+      const next = {
+        x: clamp(panStartRef.current.x + g.dy / 140, -1.1, 1.1),
+        y: panStartRef.current.y + g.dx / 110,
+      };
+      ballRotRef.current = next;
+    },
+    onStartShouldSetPanResponder: () => true,
+  })).current;
 
   useEffect(() => {
     if (!isPlaying) { livePulse.setValue(1); return; }
@@ -229,7 +249,7 @@ export default function LandingPage() {
           <View style={styles.hero}>
             <View style={{ position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: outerGlowColor }} />
             <View style={{ position: 'absolute', width: 240, height: 240, borderRadius: 120, backgroundColor: midGlowColor }} />
-            <View style={styles.canvasWrap}>
+            <View {...ballPan.panHandlers} style={styles.canvasWrap}>
               <Suspense fallback={<ActivityIndicator size="large" color="#F05568" />}>
                 <Canvas camera={{ position: [0, 0, 5.8], fov: 40 }} onCreated={configureThreeNativeRenderer}>
                   <ambientLight intensity={0.8} color="#ffffff" />
@@ -237,7 +257,7 @@ export default function LandingPage() {
                   <directionalLight position={[-6, 4, 4]} intensity={1.4} color="#FF8A98" />
                   <directionalLight position={[0, -8, 5]} intensity={0.9} color="#4B1631" />
                   <BackgroundDust />
-                  <TexturedVisioball rotationX={0.12} rotationY={0.2} />
+                  <TexturedVisioball rotationRef={ballRotRef} />
                 </Canvas>
               </Suspense>
             </View>

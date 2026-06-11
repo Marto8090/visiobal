@@ -178,7 +178,6 @@ export default function ControlScreen() {
   const [sleepMode, setSleepMode] = useState(false);
   const [volume, setVolume] = useState(57);
   const [batteryLevel] = useState(0);
-  const [ballRot, setBallRot] = useState({ x: 0, y: 0 });
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const playScale = useRef(new Animated.Value(1)).current;
@@ -190,8 +189,8 @@ export default function ControlScreen() {
   const pressOut = (scale: Animated.Value) =>
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }).start();
 
-  const ballRotRef = useRef(ballRot);
-  const panStartRef = useRef(ballRot);
+  const ballRotRef = useRef({ x: 0, y: 0 });
+  const panStartRef = useRef({ x: 0, y: 0 });
   const glowY = useRef(new Animated.Value(0)).current;
   const CANVAS_H = Math.min(width * 0.82, 320);
   const GLOW_SCALE = CANVAS_H / (2 * Math.tan((42 / 2) * (Math.PI / 180)) * 6.2);
@@ -305,7 +304,6 @@ export default function ControlScreen() {
     onPanResponderMove: (_, g) => {
       const next = { x: clamp(panStartRef.current.x + g.dy / 140, -1.1, 1.1), y: panStartRef.current.y + g.dx / 110 };
       ballRotRef.current = next;
-      setBallRot(next);
     },
   })).current;
 
@@ -402,8 +400,7 @@ export default function ControlScreen() {
               <directionalLight color="#4B1631" intensity={0.9} position={[0, -8, 5]} />
               <BackgroundDust />
               <TexturedVisioball
-                rotationX={ballRot.x}
-                rotationY={ballRot.y}
+                rotationRef={ballRotRef}
                 onHoverOffset={(offset) => glowY.setValue(-offset * GLOW_SCALE)}
               />
             </Canvas>
