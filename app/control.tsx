@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { Canvas } from '@react-three/fiber/native';
 import type { Href } from 'expo-router';
 import { useRouter } from 'expo-router';
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -24,7 +25,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { FrequencySlider } from '@/src/components/FrequencySlider';
 import { BackgroundDust, TexturedVisioball } from '@/src/components/VisioballModel';
 import { useI18n } from '@/src/context/I18nContext';
-import { usePlayerState } from '@/src/context/PlayerContext';
+import { TRACKS, usePlayerState } from '@/src/context/PlayerContext';
 import { ThemeColors, useTheme } from '@/src/context/ThemeContext';
 import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 import { configureThreeNativeRenderer } from '@/src/utils/configureThreeNativeRenderer';
@@ -165,29 +166,46 @@ function Tile({ color, icon, onPress, sub, styles, title }: TileProps) {
 
 export default function ControlScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const { isDark, theme } = useTheme();
   const { t } = useI18n();
   const styles = useMemo(() => makeStyles(theme, isDark), [theme, isDark]);
-  const { canSendCommands, connectedDevice, disconnectFromBall, isConnected, sendCommandToBall } = useBluetoothSession();
-  const { isPlaying, setIsPlaying } = usePlayerState();
+  const { batteryLevel, canSendCommands, connectedDevice, disconnectFromBall, isConnected, sendCommandToBall } = useBluetoothSession();
+  const { isPlaying, trackIndex, setIsPlaying, setTrackIndex } = usePlayerState();
+  const currentTrack = TRACKS[trackIndex] ?? TRACKS[0];
 
-  const [sending, setSending] = useState(false);
   const [disconnectSending, setDisconnectSending] = useState(false);
   const [sleepSending, setSleepSending] = useState(false);
   const [sleepMode, setSleepMode] = useState(false);
   const [volume, setVolume] = useState(57);
-  const [batteryLevel] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const playScale = useRef(new Animated.Value(1)).current;
   const skipBackScale = useRef(new Animated.Value(1)).current;
   const skipFwdScale = useRef(new Animated.Value(1)).current;
 
-  const pressIn = (scale: Animated.Value) =>
+  const deviceReady = isConnected && Boolean(connectedDevice);
+  const displayBatteryLevel = deviceReady ? batteryLevel ?? 0 : 0;
+  const displayIsPlaying = deviceReady && isPlaying;
+
+  useEffect(() => {
+    if (isFocused && currentTrack.command && isConnected && canSendCommands) {
+      void sendCommandToBall(currentTrack.command).catch(() => {});
+    }
+  }, [trackIndex, isFocused]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pressIn = useCallback((scale: Animated.Value) => {
     Animated.spring(scale, { toValue: 1.22, useNativeDriver: true, tension: 300, friction: 8 }).start();
-  const pressOut = (scale: Animated.Value) =>
+  }, []);
+  const pressOut = useCallback((scale: Animated.Value) => {
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }).start();
+  }, []);
+
+  const sendHardwareCommand = useCallback((command: string) => {
+    if (!isConnected || !canSendCommands) return;
+    void sendCommandToBall(command).catch(() => {});
+  }, [canSendCommands, isConnected, sendCommandToBall]);
 
   const ballRotRef = useRef({ x: 0, y: 0 });
   const panStartRef = useRef({ x: 0, y: 0 });
@@ -307,42 +325,43 @@ export default function ControlScreen() {
     },
   })).current;
 
-  const deviceReady = isConnected && Boolean(connectedDevice);
   const suffix = connectedDevice?.id ? connectedDevice.id.slice(-2).toUpperCase() : '--';
 
-  const sendTransportCommand = async (cmd: 'PLAY' | 'PAUSE' | 'NEXT' | 'PREV') => {
-    if (!deviceReady) { router.replace('/scan' as Href); return false; }
-    if (!canSendCommands) { Alert.alert(t('cmdUnavailable'), t('bleNotReady')); return false; }
-    try {
-      setSending(true);
-      await sendCommandToBall(cmd);
-      return true;
-    } catch (e) {
-      Alert.alert(t('cmdFailed'), e instanceof Error ? e.message : 'Could not send.');
-      return false;
-    } finally { setSending(false); }
+  const handlePlay = () => {
+    if (!deviceReady || !canSendCommands) {
+      router.replace('/scan' as Href);
+      return;
+    }
+
+    const nextIsPlaying = !isPlaying;
+    sendHardwareCommand(nextIsPlaying ? 'PLAY' : 'PAUSE');
+    setIsPlaying(nextIsPlaying);
   };
 
-  const handlePlay = async () => {
-    const sent = await sendTransportCommand(isPlaying ? 'PAUSE' : 'PLAY');
-    if (sent) setIsPlaying(v => !v);
+  const handleSkipBack = () => {
+    if (!deviceReady || !canSendCommands) {
+      router.replace('/scan' as Href);
+      return;
+    }
+
+    setTrackIndex((trackIndex - 1 + TRACKS.length) % TRACKS.length);
+    setIsPlaying(true);
   };
 
-  const handleSkipBack = async () => {
-    const sent = await sendTransportCommand('PREV');
-    if (sent) setIsPlaying(true);
-  };
+  const handleSkipForward = () => {
+    if (!deviceReady || !canSendCommands) {
+      router.replace('/scan' as Href);
+      return;
+    }
 
-  const handleSkipForward = async () => {
-    const sent = await sendTransportCommand('NEXT');
-    if (sent) setIsPlaying(true);
+    setTrackIndex((trackIndex + 1) % TRACKS.length);
+    setIsPlaying(true);
   };
 
   const handleVolumeComplete = (nextVolume: number) => {
     const roundedVolume = Math.round(nextVolume);
     setVolume(roundedVolume);
-    if (!deviceReady || !canSendCommands) return;
-    void sendCommandToBall(`VOL:${roundedVolume}`).catch(() => {});
+    sendHardwareCommand(`VOL:${roundedVolume}`);
   };
 
   const handleSleepModeToggle = async () => {
@@ -407,8 +426,8 @@ export default function ControlScreen() {
           </Suspense>
         </View>
         <View style={styles.batteryBadge}>
-          <Ionicons name={batteryIconName(batteryLevel)} size={15} color={batteryColor(batteryLevel)} />
-          <Text style={[styles.batteryText, { color: batteryColor(batteryLevel) }]}>{batteryLevel}%</Text>
+          <Ionicons name={batteryIconName(displayBatteryLevel)} size={15} color={batteryColor(displayBatteryLevel)} />
+          <Text style={[styles.batteryText, { color: batteryColor(displayBatteryLevel) }]}>{displayBatteryLevel}%</Text>
         </View>
       </View>
 
@@ -456,9 +475,8 @@ export default function ControlScreen() {
         <View style={styles.transport}>
           <Animated.View style={{ transform: [{ scale: skipBackScale }] }}>
             <Pressable
-              disabled={sending}
               style={styles.ctrlSkipBtn}
-              onPress={() => void handleSkipBack()}
+              onPress={handleSkipBack}
               onPressIn={() => pressIn(skipBackScale)}
               onPressOut={() => pressOut(skipBackScale)}
             >
@@ -468,24 +486,19 @@ export default function ControlScreen() {
 
           <Animated.View style={{ transform: [{ scale: playScale }] }}>
             <Pressable
-              disabled={sending}
-              onPress={() => void handlePlay()}
+              onPress={handlePlay}
               onPressIn={() => pressIn(playScale)}
               onPressOut={() => pressOut(playScale)}
-              style={[styles.playBtn, !deviceReady && styles.playBtnOff]}
+              style={styles.playBtn}
             >
-              {sending
-                ? <ActivityIndicator color="#F9FAFB" />
-                : <Ionicons name={isPlaying ? 'pause' : 'play'} size={28} color="#F9FAFB" style={!isPlaying && styles.playIconNudge} />
-              }
+              <Ionicons name={displayIsPlaying ? 'pause' : 'play'} size={28} color="#F9FAFB" style={!displayIsPlaying && styles.playIconNudge} />
             </Pressable>
           </Animated.View>
 
           <Animated.View style={{ transform: [{ scale: skipFwdScale }] }}>
             <Pressable
-              disabled={sending}
               style={styles.ctrlSkipBtn}
-              onPress={() => void handleSkipForward()}
+              onPress={handleSkipForward}
               onPressIn={() => pressIn(skipFwdScale)}
               onPressOut={() => pressOut(skipFwdScale)}
             >

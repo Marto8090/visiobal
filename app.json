@@ -53,12 +53,6 @@
           "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to scan for and connect to Visiobal devices"
         }
       ],
-      [
-        "expo-audio",
-        {
-          "recordAudioAndroid": false
-        }
-      ],
       "expo-asset",
       "expo-font",
       "expo-notifications",

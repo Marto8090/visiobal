@@ -17,6 +17,7 @@ const ADVERTISING_RECOVERY_MS = 1500;
 export const TARGET_BLE_DEVICE_NAME = 'VisioBal';
 export const COMMAND_SERVICE_UUID        = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
 export const COMMAND_CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+export const BATTERY_CHARACTERISTIC_UUID = 'a1b2c3d4-1111-2222-3333-abcdefabcdef';
 
 const ALLOWED_COMMANDS = new Set([
   'ON', 'OFF', 'SLEEP', 'WAKE', 'PLAY', 'PAUSE', 'NEXT', 'PREV', 'PING',
@@ -34,6 +35,7 @@ function validateCommand(command: string): void {
 }
 type BleRuntime = typeof import('react-native-ble-plx');
 export type BluetoothSessionSnapshot = {
+  batteryLevel: number | null;
   connectedDevice: BallDevice | null;
   isConnected: boolean;
   canSendCommands: boolean;
@@ -51,8 +53,10 @@ let lastKnownDeviceId: string | null = null;
 let lastDisconnectAt = 0;
 const verifiedDeviceIds = new Set<string>();
 let disconnectSubscription: Subscription | null = null;
+let batterySubscription: Subscription | null = null;
 const sessionListeners = new Set<() => void>();
 let sessionSnapshot: BluetoothSessionSnapshot = {
+  batteryLevel: null,
   connectedDevice: null,
   isConnected: false,
   canSendCommands: Boolean(COMMAND_SERVICE_UUID && COMMAND_CHARACTERISTIC_UUID),
@@ -60,6 +64,7 @@ let sessionSnapshot: BluetoothSessionSnapshot = {
 
 function updateSessionSnapshot() {
   sessionSnapshot = {
+    batteryLevel: sessionSnapshot.batteryLevel,
     connectedDevice: connectedDevice ? toBallDevice(connectedDevice) : null,
     isConnected: connectedDevice !== null,
     canSendCommands: Boolean(COMMAND_SERVICE_UUID && COMMAND_CHARACTERISTIC_UUID),
@@ -75,6 +80,19 @@ function clearDisconnectSubscription() {
   disconnectSubscription = null;
 }
 
+function clearBatterySubscription() {
+  batterySubscription?.remove();
+  batterySubscription = null;
+}
+
+function setBatteryLevel(nextBatteryLevel: number | null) {
+  sessionSnapshot = {
+    ...sessionSnapshot,
+    batteryLevel: nextBatteryLevel,
+  };
+  emitSessionChange();
+}
+
 function setConnectedDevice(nextDevice: Device | null) {
   connectedDevice = nextDevice;
 
@@ -86,6 +104,14 @@ function setConnectedDevice(nextDevice: Device | null) {
   updateSessionSnapshot();
 
   clearDisconnectSubscription();
+  clearBatterySubscription();
+
+  if (!nextDevice) {
+    sessionSnapshot = {
+      ...sessionSnapshot,
+      batteryLevel: null,
+    };
+  }
 
   if (nextDevice) {
     disconnectSubscription = getBleManager().onDeviceDisconnected(nextDevice.id, () => {
@@ -94,6 +120,49 @@ function setConnectedDevice(nextDevice: Device | null) {
   }
 
   emitSessionChange();
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const cleanValue = value.replace(/=+$/, '');
+  const bytes: number[] = [];
+
+  for (let index = 0; index < cleanValue.length; index += 4) {
+    const first = alphabet.indexOf(cleanValue[index] ?? 'A');
+    const second = alphabet.indexOf(cleanValue[index + 1] ?? 'A');
+    const third = alphabet.indexOf(cleanValue[index + 2] ?? 'A');
+    const fourth = alphabet.indexOf(cleanValue[index + 3] ?? 'A');
+    const chunk = (first << 18) | (second << 12) | ((third & 63) << 6) | (fourth & 63);
+
+    bytes.push((chunk >> 16) & 255);
+
+    if (index + 2 < cleanValue.length) {
+      bytes.push((chunk >> 8) & 255);
+    }
+
+    if (index + 3 < cleanValue.length) {
+      bytes.push(chunk & 255);
+    }
+  }
+
+  return Uint8Array.from(bytes);
+}
+
+function decodeBatteryLevel(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const bytes = base64ToBytes(value);
+  if (bytes.length === 0) {
+    return null;
+  }
+
+  const textValue = String.fromCharCode(...bytes).trim();
+  const numericValue = Number.parseInt(textValue, 10);
+  const rawValue = Number.isFinite(numericValue) ? numericValue : bytes[0];
+
+  return Math.max(0, Math.min(100, rawValue));
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -286,6 +355,76 @@ async function resolveCommandTarget(device: Device): Promise<{
     refreshedDevice,
     service,
   };
+}
+
+async function resolveCharacteristicByUuid(
+  device: Device,
+  characteristicUuid: string
+): Promise<{
+  characteristic: Characteristic;
+  refreshedDevice: Device;
+  service: Service;
+} | null> {
+  const refreshedDevice = await device.discoverAllServicesAndCharacteristics();
+  const services = await refreshedDevice.services();
+
+  for (const service of services) {
+    const characteristics = await service.characteristics();
+    const characteristic = characteristics.find(
+      (candidate) => normalizeUuid(candidate.uuid) === normalizeUuid(characteristicUuid)
+    );
+
+    if (characteristic) {
+      return {
+        characteristic,
+        refreshedDevice,
+        service,
+      };
+    }
+  }
+
+  return null;
+}
+
+async function startBatteryMonitor(device: Device): Promise<void> {
+  clearBatterySubscription();
+
+  const target = await resolveCharacteristicByUuid(device, BATTERY_CHARACTERISTIC_UUID);
+  if (!target) {
+    setBatteryLevel(null);
+    return;
+  }
+
+  const applyCharacteristicValue = (characteristic: Characteristic | null) => {
+    const nextBatteryLevel = decodeBatteryLevel(characteristic?.value);
+
+    if (nextBatteryLevel !== null) {
+      setBatteryLevel(nextBatteryLevel);
+    }
+  };
+
+  if (target.characteristic.isReadable) {
+    try {
+      const readCharacteristic = await target.characteristic.read();
+      applyCharacteristicValue(readCharacteristic);
+    } catch {
+      // Some test characteristics may only notify.
+    }
+  }
+
+  if (target.characteristic.isNotifiable || target.characteristic.isIndicatable) {
+    batterySubscription = target.refreshedDevice.monitorCharacteristicForService(
+      target.service.uuid,
+      target.characteristic.uuid,
+      (error, characteristic) => {
+        if (error) {
+          return;
+        }
+
+        applyCharacteristicValue(characteristic ?? null);
+      }
+    );
+  }
 }
 
 export function getBluetoothSessionSnapshot(): BluetoothSessionSnapshot {
@@ -527,8 +666,10 @@ export async function connectToBall(device: BallDevice): Promise<boolean> {
   await stopScanning();
 
   const manager = getBleManager();
-  const isCurrentDevice = connectedDevice?.id === device.id;
+  const currentConnectedDevice = connectedDevice;
+  const isCurrentDevice = currentConnectedDevice?.id === device.id;
   if (isCurrentDevice) {
+    void startBatteryMonitor(currentConnectedDevice).catch(() => {});
     return true;
   }
 
@@ -568,6 +709,7 @@ export async function connectToBall(device: BallDevice): Promise<boolean> {
   verifiedDeviceIds.add(refreshedDevice.id);
   lastKnownDeviceId = refreshedDevice.id;
   setConnectedDevice(refreshedDevice);
+  void startBatteryMonitor(refreshedDevice).catch(() => {});
   return true;
 }
 

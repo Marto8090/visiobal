@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
+  BackHandler,
   FlatList,
   Pressable,
   StatusBar,
@@ -18,7 +19,6 @@ import { useI18n } from '@/src/context/I18nContext';
 import { TRACKS, Track, usePlayerState } from '@/src/context/PlayerContext';
 import { ThemeColors, useTheme } from '@/src/context/ThemeContext';
 import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
-import { useMelodyPlayer } from '@/src/hooks/useMelodyPlayer';
 
 const VOLUME_STEPS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 
@@ -151,22 +151,18 @@ function makeStyles(theme: ThemeColors) {
       paddingHorizontal: 5, paddingVertical: 2,
     },
     liveChipText: { color: '#22C55E', fontSize: 9, fontWeight: '800' },
-    synthChip: {
-      backgroundColor: 'rgba(168,85,247,0.10)', borderRadius: 5,
-      paddingHorizontal: 5, paddingVertical: 2,
-    },
-    synthChipText: { color: '#A855F7', fontSize: 9, fontWeight: '700' },
     pressed: { opacity: 0.75, transform: [{ scale: 0.97 }] },
   });
 }
 
 export default function SoundPage() {
   const router = useRouter();
+  const isFocused = useIsFocused();
+  const { from } = useLocalSearchParams<{ from?: string }>();
   const { theme } = useTheme();
   const { t } = useI18n();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const { isConnected, canSendCommands, sendCommandToBall } = useBluetoothSession();
-  const player = useMelodyPlayer();
 
   const { isPlaying, trackIndex, setIsPlaying, setTrackIndex } = usePlayerState();
   const currentTrack: Track = TRACKS[trackIndex] ?? TRACKS[0];
@@ -177,53 +173,19 @@ export default function SoundPage() {
   const skipBackScale = useRef(new Animated.Value(1)).current;
   const skipFwdScale = useRef(new Animated.Value(1)).current;
 
-  const shouldUseLocalPlayer = !isConnected;
-  const isCurrentLoaded = shouldUseLocalPlayer && player.loadedIdx === currentTrack.melodyIdx;
-  const elapsed = isCurrentLoaded ? Math.round(player.positionMs / 1000) : 0;
-  const totalSeconds = isCurrentLoaded && player.durationMs > 0
-    ? Math.round(player.durationMs / 1000)
-    : parseInt(currentTrack.duration.split(':')[1] ?? '0', 10) +
-      parseInt(currentTrack.duration.split(':')[0] ?? '0', 10) * 60;
-  const progress = totalSeconds > 0 ? Math.min(elapsed / totalSeconds, 1) : 0;
+  const elapsed = 0;
+  const totalSeconds = parseInt(currentTrack.duration.split(':')[1] ?? '0', 10) +
+    parseInt(currentTrack.duration.split(':')[0] ?? '0', 10) * 60;
+  const progress = isConnected && isPlaying && totalSeconds > 0 ? Math.min(elapsed / totalSeconds, 1) : 0;
   const progressPct = `${Math.round(progress * 100)}%` as `${number}%`;
-  const displayIsPlaying = shouldUseLocalPlayer ? player.isPlaying || player.isLoading : isPlaying;
-
-  // Keep a ref so effects can call player methods without re-running
-  const playerRef = useRef(player);
-  playerRef.current = player;
-
-  // Sync player with intent whenever track or play state changes
-  useEffect(() => {
-    if (!shouldUseLocalPlayer) {
-      void playerRef.current.stop();
-      return;
-    }
-
-    const { melodyIdx } = currentTrack;
-    if (isPlaying) {
-      if (playerRef.current.loadedIdx === melodyIdx) {
-        void playerRef.current.resume();
-      } else {
-        void playerRef.current.play(melodyIdx);
-      }
-    } else {
-      void playerRef.current.pause();
-    }
-  }, [isPlaying, trackIndex, shouldUseLocalPlayer]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Sync volume to player
-  useEffect(() => {
-    if (shouldUseLocalPlayer) {
-      void playerRef.current.setVolume(volume / 100);
-    }
-  }, [shouldUseLocalPlayer, volume]);
+  const displayIsPlaying = isConnected && isPlaying;
 
   // Send BLE command when a hardware track is selected while connected
   useEffect(() => {
-    if (currentTrack.command && isConnected && canSendCommands) {
+    if (isFocused && currentTrack.command && isConnected && canSendCommands) {
       void sendCommandToBall(currentTrack.command).catch(() => {});
     }
-  }, [trackIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [trackIndex, isFocused]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pressIn = useCallback((scale: Animated.Value) =>
     Animated.spring(scale, { toValue: 1.22, useNativeDriver: true, tension: 300, friction: 8 }).start(), []);
@@ -231,12 +193,17 @@ export default function SoundPage() {
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }).start(), []);
 
   const sendHardwareCommand = useCallback((command: string) => {
-    if (!isConnected || !canSendCommands) return;
+    if (!isConnected || !canSendCommands) return false;
     void sendCommandToBall(command).catch(() => {});
+    return true;
   }, [canSendCommands, isConnected, sendCommandToBall]);
 
   const togglePlay = () => {
-    if (shouldUseLocalPlayer && player.isLoading) return;
+    if (!isConnected || !canSendCommands) {
+      setIsPlaying(false);
+      return;
+    }
+
     const nextIsPlaying = !isPlaying;
     sendHardwareCommand(nextIsPlaying ? 'PLAY' : 'PAUSE');
     setIsPlaying(nextIsPlaying);
@@ -250,22 +217,41 @@ export default function SoundPage() {
 
   const skipNext = () => {
     setTrackIndex((trackIndex + 1) % TRACKS.length);
-    setIsPlaying(true);
+    setIsPlaying(isConnected && canSendCommands);
   };
 
   const skipPrev = () => {
-    if (elapsed > 3) {
-      void playerRef.current.play(currentTrack.melodyIdx);
-      sendHardwareCommand(currentTrack.command);
-      setIsPlaying(true);
-    } else {
-      setTrackIndex((trackIndex - 1 + TRACKS.length) % TRACKS.length);
-      setIsPlaying(true);
-    }
+    setTrackIndex((trackIndex - 1 + TRACKS.length) % TRACKS.length);
+    setIsPlaying(isConnected && canSendCommands);
   };
 
+  const handleBack = useCallback(() => {
+    if (from === 'landing') {
+      router.replace({
+        pathname: '/landing',
+        params: { refresh: Date.now().toString() },
+      });
+      return;
+    }
+
+    router.back();
+  }, [from, router]);
+
+  useEffect(() => {
+    if (from !== 'landing') {
+      return;
+    }
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleBack();
+      return true;
+    });
+
+    return () => subscription.remove();
+  }, [from, handleBack]);
+
   const connectedColor = isConnected ? '#22C55E' : '#F59E0B';
-  const connectedLabel = isConnected ? 'Ball connected — hardware audio active' : 'Not connected — demo mode';
+  const connectedLabel = isConnected ? 'Ball connected - hardware audio active' : 'Not connected - connect ball to play sounds';
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -273,7 +259,7 @@ export default function SoundPage() {
       <View style={styles.container}>
 
         <View style={styles.header}>
-          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <Pressable style={styles.backBtn} onPress={handleBack}>
             <Ionicons name="chevron-back" size={26} color="#A855F7" />
           </Pressable>
           <Text style={styles.headerTitle}>{t('soundLibrary')}</Text>
@@ -330,15 +316,12 @@ export default function SoundPage() {
                 onPressOut={() => pressOut(playScale)}
                 style={styles.playBtn}
               >
-                {shouldUseLocalPlayer && player.isLoading
-                  ? <ActivityIndicator size="small" color="#F9FAFB" />
-                  : <Ionicons
-                      name={displayIsPlaying ? 'pause' : 'play'}
-                      size={28}
-                      color="#F9FAFB"
-                      style={!displayIsPlaying && { marginLeft: 3 }}
-                    />
-                }
+                <Ionicons
+                  name={displayIsPlaying ? 'pause' : 'play'}
+                  size={28}
+                  color="#F9FAFB"
+                  style={!displayIsPlaying && { marginLeft: 3 }}
+                />
               </Pressable>
             </Animated.View>
 
@@ -392,7 +375,10 @@ export default function SoundPage() {
             const active = index === trackIndex;
             return (
               <Pressable
-                onPress={() => { setTrackIndex(index); setIsPlaying(true); }}
+                onPress={() => {
+                  setTrackIndex(index);
+                  setIsPlaying(isConnected && canSendCommands);
+                }}
                 style={({ pressed }) => [
                   styles.trackRow,
                   active && styles.trackRowActive,
@@ -413,12 +399,9 @@ export default function SoundPage() {
                 </View>
                 <View style={styles.trackRight}>
                   <Text style={styles.trackDuration}>
-                    {active ? formatTime(elapsed) : item.duration}
+                    {active && displayIsPlaying ? formatTime(elapsed) : item.duration}
                   </Text>
-                  {item.command
-                    ? <View style={styles.liveChip}><Text style={styles.liveChipText}>LIVE</Text></View>
-                    : <View style={styles.synthChip}><Text style={styles.synthChipText}>SYNTH</Text></View>
-                  }
+                  <View style={styles.liveChip}><Text style={styles.liveChipText}>BALL</Text></View>
                 </View>
               </Pressable>
             );

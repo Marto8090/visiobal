@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { Href } from 'expo-router';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import type { ReactNode } from 'react';
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import {
   Alert,
+  BackHandler,
   Platform,
   Pressable,
   ScrollView,
@@ -175,6 +176,7 @@ function StaticRow({ label, styles, subtitle }: StaticRowProps) {
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
   const { isDark, resetTheme, theme, toggleTheme } = useTheme();
   const { locale, resetLocale, setLocale, t } = useI18n();
   const { disconnectFromBall, isConnected } = useBluetoothSession();
@@ -227,6 +229,31 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleBack = useCallback(() => {
+    if (from === 'landing') {
+      router.replace({
+        pathname: '/landing',
+        params: { refresh: Date.now().toString() },
+      });
+      return;
+    }
+
+    router.back();
+  }, [from, router]);
+
+  useEffect(() => {
+    if (from !== 'landing') {
+      return;
+    }
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleBack();
+      return true;
+    });
+
+    return () => subscription.remove();
+  }, [from, handleBack]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle={theme.statusBarStyle} />
@@ -234,7 +261,7 @@ export default function SettingsScreen() {
       <View style={styles.header}>
         <Pressable
           accessibilityLabel="Go back"
-          onPress={() => router.back()}
+          onPress={handleBack}
           style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
         >
           <Ionicons color="#A855F7" name="chevron-back" size={26} />

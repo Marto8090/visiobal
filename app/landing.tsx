@@ -1,12 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { Canvas } from '@react-three/fiber/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  InteractionManager,
   Modal,
   PanResponder,
   Pressable,
@@ -22,6 +24,7 @@ import { BackgroundDust, TexturedVisioball } from '@/src/components/VisioballMod
 import { useI18n } from '@/src/context/I18nContext';
 import { TRACKS, usePlayerState } from '@/src/context/PlayerContext';
 import { ThemeColors, useTheme } from '@/src/context/ThemeContext';
+import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 import { configureThreeNativeRenderer } from '@/src/utils/configureThreeNativeRenderer';
 
 const { width } = Dimensions.get('window');
@@ -61,6 +64,7 @@ function makeStyles(theme: ThemeColors) {
     },
     hero: { alignItems: 'center', justifyContent: 'center' },
     canvasWrap: { width, height: width },
+    canvas: { height: '100%', width: '100%' },
     bottom: { paddingHorizontal: 16, paddingBottom: 16 },
     bottomCard: {
       backgroundColor: theme.card,
@@ -166,14 +170,13 @@ function makeStyles(theme: ThemeColors) {
 
 export default function LandingPage() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const { isDark, theme } = useTheme();
   const { t } = useI18n();
   const styles = useMemo(() => makeStyles(theme), [theme]);
+  const { isConnected, canSendCommands, sendCommandToBall } = useBluetoothSession();
   const { isPlaying, trackIndex, setIsPlaying, setTrackIndex } = usePlayerState();
   const currentTrack = TRACKS[trackIndex] ?? TRACKS[0];
-  const togglePlay = () => setIsPlaying(v => !v);
-  const skipNext = () => setTrackIndex(i => (i + 1) % TRACKS.length);
-  const skipPrev = () => setTrackIndex(i => (i - 1 + TRACKS.length) % TRACKS.length);
 
   const [showOptions, setShowOptions] = useState(false);
   const [speed, setSpeed] = useState(12);
@@ -188,11 +191,54 @@ export default function LandingPage() {
   const livePulse = useRef(new Animated.Value(1)).current;
   const ballRotRef = useRef({ x: 0.12, y: 0.2 });
   const panStartRef = useRef({ x: 0.12, y: 0.2 });
+  const [showCanvas, setShowCanvas] = useState(isFocused);
+  const [canvasVersion, setCanvasVersion] = useState(0);
+  const displayIsPlaying = isConnected && isPlaying;
 
-  const pressIn = (scale: Animated.Value) =>
+  useEffect(() => {
+    if (isFocused && currentTrack.command && isConnected && canSendCommands) {
+      void sendCommandToBall(currentTrack.command).catch(() => {});
+    }
+  }, [trackIndex, isFocused]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pressIn = useCallback((scale: Animated.Value) => {
     Animated.spring(scale, { toValue: 1.22, useNativeDriver: true, tension: 300, friction: 8 }).start();
-  const pressOut = (scale: Animated.Value) =>
+  }, []);
+  const pressOut = useCallback((scale: Animated.Value) => {
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }).start();
+  }, []);
+
+  const sendHardwareCommand = useCallback((command: string) => {
+    if (!isConnected || !canSendCommands) return;
+    void sendCommandToBall(command).catch(() => {});
+  }, [canSendCommands, isConnected, sendCommandToBall]);
+
+  const togglePlay = () => {
+    if (!isConnected || !canSendCommands) {
+      setIsPlaying(false);
+      return;
+    }
+
+    const nextIsPlaying = !isPlaying;
+    sendHardwareCommand(nextIsPlaying ? 'PLAY' : 'PAUSE');
+    setIsPlaying(nextIsPlaying);
+  };
+
+  const skipNext = () => {
+    setTrackIndex((trackIndex + 1) % TRACKS.length);
+    setIsPlaying(isConnected && canSendCommands);
+  };
+
+  const skipPrev = () => {
+    setTrackIndex((trackIndex - 1 + TRACKS.length) % TRACKS.length);
+    setIsPlaying(isConnected && canSendCommands);
+  };
+
+  const handleVolumeComplete = (nextVolume: number) => {
+    const roundedVolume = Math.round(nextVolume);
+    setVolume(roundedVolume);
+    sendHardwareCommand(`VOL:${roundedVolume}`);
+  };
 
   const ballPan = useRef(PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 4 || Math.abs(g.dy) > 4,
@@ -206,6 +252,22 @@ export default function LandingPage() {
     },
     onStartShouldSetPanResponder: () => true,
   })).current;
+
+  useEffect(() => {
+    if (!isFocused) {
+      setShowCanvas(false);
+      return;
+    }
+
+    setShowCanvas(false);
+
+    const interaction = InteractionManager.runAfterInteractions(() => {
+      setCanvasVersion(version => version + 1);
+      setShowCanvas(true);
+    });
+
+    return () => interaction.cancel();
+  }, [isFocused]);
 
   useEffect(() => {
     if (!isPlaying) { livePulse.setValue(1); return; }
@@ -240,7 +302,7 @@ export default function LandingPage() {
             </View>
             <Pressable
               style={({ pressed }) => [styles.powerBtn, pressed && styles.pressed]}
-              onPress={() => router.push('/settings')}
+              onPress={() => router.replace({ pathname: '/settings', params: { from: 'landing' } })}
             >
               <Ionicons name="settings-outline" size={20} color={theme.textMuted} />
             </Pressable>
@@ -250,16 +312,23 @@ export default function LandingPage() {
             <View style={{ position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: outerGlowColor }} />
             <View style={{ position: 'absolute', width: 240, height: 240, borderRadius: 120, backgroundColor: midGlowColor }} />
             <View {...ballPan.panHandlers} style={styles.canvasWrap}>
-              <Suspense fallback={<ActivityIndicator size="large" color="#F05568" />}>
-                <Canvas camera={{ position: [0, 0, 5.8], fov: 40 }} onCreated={configureThreeNativeRenderer}>
-                  <ambientLight intensity={0.8} color="#ffffff" />
-                  <directionalLight position={[6, 8, 8]} intensity={2.2} color="#ffffff" />
-                  <directionalLight position={[-6, 4, 4]} intensity={1.4} color="#FF8A98" />
-                  <directionalLight position={[0, -8, 5]} intensity={0.9} color="#4B1631" />
-                  <BackgroundDust />
-                  <TexturedVisioball rotationRef={ballRotRef} />
-                </Canvas>
-              </Suspense>
+              {showCanvas && (
+                <Suspense fallback={<ActivityIndicator size="large" color="#F05568" />}>
+                  <Canvas
+                    key={canvasVersion}
+                    camera={{ position: [0, 0, 5.8], fov: 40 }}
+                    onCreated={configureThreeNativeRenderer}
+                    style={styles.canvas}
+                  >
+                    <ambientLight intensity={0.8} color="#ffffff" />
+                    <directionalLight position={[6, 8, 8]} intensity={2.2} color="#ffffff" />
+                    <directionalLight position={[-6, 4, 4]} intensity={1.4} color="#FF8A98" />
+                    <directionalLight position={[0, -8, 5]} intensity={0.9} color="#4B1631" />
+                    <BackgroundDust />
+                    <TexturedVisioball rotationRef={ballRotRef} />
+                  </Canvas>
+                </Suspense>
+              )}
             </View>
           </View>
 
@@ -274,7 +343,7 @@ export default function LandingPage() {
                   <Text style={styles.trackTitle} numberOfLines={1}>{currentTrack.title}</Text>
                   <Text style={styles.trackMeta}>{currentTrack.genre} · {currentTrack.duration}</Text>
                 </View>
-                {isPlaying && (
+                {displayIsPlaying && (
                   <View style={styles.playingBadge}>
                     <Animated.View style={[styles.playingDot, { opacity: livePulse }]} />
                     <Text style={styles.playingText}>LIVE</Text>
@@ -302,10 +371,10 @@ export default function LandingPage() {
                     style={styles.playBtn}
                   >
                     <Ionicons
-                      name={isPlaying ? 'pause' : 'play'}
+                      name={displayIsPlaying ? 'pause' : 'play'}
                       size={28}
                       color="#F9FAFB"
-                      style={!isPlaying && { marginLeft: 3 }}
+                      style={!displayIsPlaying && { marginLeft: 3 }}
                     />
                   </Pressable>
                 </Animated.View>
@@ -331,9 +400,9 @@ export default function LandingPage() {
                   value={volume}
                   minimumValue={0}
                   maximumValue={100}
-                  step={10}
+                  step={5}
                   onValueChange={setVolume}
-                  onSlidingComplete={setVolume}
+                  onSlidingComplete={handleVolumeComplete}
                 />
                 <View style={styles.ticksRow}>
                   {VOLUME_STEPS.map(step => (
@@ -425,7 +494,10 @@ export default function LandingPage() {
 
             <Pressable
               style={({ pressed }) => [styles.musicBtn, pressed && styles.pressed]}
-              onPress={() => { setShowOptions(false); router.push('/sound'); }}
+              onPress={() => {
+                setShowOptions(false);
+                router.replace({ pathname: '/sound', params: { from: 'landing' } });
+              }}
             >
               <Ionicons name="musical-notes" size={18} color="#fff" />
               <Text style={styles.musicBtnText}>{t('soundAndMusic')}</Text>

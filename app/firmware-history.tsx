@@ -40,8 +40,8 @@ const updates: FirmwareUpdate[] = [
     changes: [
       'Theme (dark or light) and language preference are now saved to device storage and restored on every launch - no more resetting to defaults.',
       'The app remembers the last connected ball. On the next launch it attempts a silent background reconnect during the splash screen and skips the scan screen if successful.',
-      'Migrated the in-app audio engine from expo-av to expo-audio for improved playback reliability.',
-      'All five synthesised melodies now match the harmonic output of the ESP32 Mozzi firmware tracks.',
+      'Sound controls now send song commands to the ball instead of playing audio on the phone.',
+      'All five song selections are mapped to the ESP32 Mozzi firmware tracks.',
     ],
   },
   {
