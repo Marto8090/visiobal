@@ -167,7 +167,7 @@ export default function SoundPage() {
   const { isPlaying, trackIndex, setIsPlaying, setTrackIndex } = usePlayerState();
   const currentTrack: Track = TRACKS[trackIndex] ?? TRACKS[0];
 
-  const [volume, setVolume] = useState(50);
+  const [volume, setVolume] = useState(5);
 
   const playScale = useRef(new Animated.Value(1)).current;
   const skipBackScale = useRef(new Animated.Value(1)).current;

@@ -10,6 +10,7 @@ import {
   Animated,
   Dimensions,
   Easing,
+  InteractionManager,
   PanResponder,
   Platform,
   Pressable,
@@ -171,23 +172,81 @@ export default function ControlScreen() {
   const { isDark, theme } = useTheme();
   const { t } = useI18n();
   const styles = useMemo(() => makeStyles(theme, isDark), [theme, isDark]);
-  const { batteryLevel, canSendCommands, connectedDevice, disconnectFromBall, isConnected, sendCommandToBall } = useBluetoothSession();
+  const { batteryIsCharging, batteryLevel, canSendCommands, connectedDevice, disconnectFromBall, isConnected, sendCommandToBall } = useBluetoothSession();
   const { isPlaying, trackIndex, setIsPlaying, setTrackIndex } = usePlayerState();
   const currentTrack = TRACKS[trackIndex] ?? TRACKS[0];
 
   const [disconnectSending, setDisconnectSending] = useState(false);
   const [sleepSending, setSleepSending] = useState(false);
   const [sleepMode, setSleepMode] = useState(false);
-  const [volume, setVolume] = useState(57);
+  const [volume, setVolume] = useState(5);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [showCanvas, setShowCanvas] = useState(isFocused);
+  const [canvasVersion, setCanvasVersion] = useState(0);
 
   const playScale = useRef(new Animated.Value(1)).current;
   const skipBackScale = useRef(new Animated.Value(1)).current;
   const skipFwdScale = useRef(new Animated.Value(1)).current;
+  const batteryChargePulse = useRef(new Animated.Value(0)).current;
 
   const deviceReady = isConnected && Boolean(connectedDevice);
   const displayBatteryLevel = deviceReady ? batteryLevel ?? 0 : 0;
+  const displayBatteryCharging = deviceReady && batteryIsCharging === true;
+  const displayBatteryColor = batteryColor(displayBatteryLevel);
   const displayIsPlaying = deviceReady && isPlaying;
+
+  useEffect(() => {
+    if (!isFocused) {
+      setShowCanvas(false);
+      return;
+    }
+
+    setShowCanvas(false);
+
+    const interaction = InteractionManager.runAfterInteractions(() => {
+      setCanvasVersion(version => version + 1);
+      setShowCanvas(true);
+    });
+
+    return () => interaction.cancel();
+  }, [isFocused]);
+
+  useEffect(() => {
+    if (!displayBatteryCharging) {
+      batteryChargePulse.stopAnimation();
+      batteryChargePulse.setValue(0);
+      return;
+    }
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(batteryChargePulse, {
+          duration: 650,
+          easing: Easing.inOut(Easing.quad),
+          toValue: 1,
+          useNativeDriver: true,
+        }),
+        Animated.timing(batteryChargePulse, {
+          duration: 650,
+          easing: Easing.inOut(Easing.quad),
+          toValue: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    loop.start();
+    return () => loop.stop();
+  }, [batteryChargePulse, displayBatteryCharging]);
+
+  const batteryChargeOpacity = batteryChargePulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.62, 1],
+  });
+  const batteryChargeScale = batteryChargePulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.08],
+  });
 
   useEffect(() => {
     if (isFocused && currentTrack.command && isConnected && canSendCommands) {
@@ -411,24 +470,44 @@ export default function ControlScreen() {
         <Animated.View style={[{ position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: outerGlowColor }, { transform: [{ translateY: glowY }] }]} />
         <Animated.View style={[{ position: 'absolute', width: 240, height: 240, borderRadius: 120, backgroundColor: midGlowColor }, { transform: [{ translateY: glowY }] }]} />
         <View {...ballPan.panHandlers} style={styles.canvasWrap}>
-          <Suspense fallback={<ActivityIndicator color="#F05568" size="large" />}>
-            <Canvas camera={{ fov: 42, position: [0, 0, 6.2] }} onCreated={configureThreeNativeRenderer}>
-              <ambientLight color="#ffffff" intensity={0.8} />
-              <directionalLight color="#ffffff" intensity={2.2} position={[6, 8, 8]} />
-              <directionalLight color="#FF8A98" intensity={1.4} position={[-6, 4, 4]} />
-              <directionalLight color="#4B1631" intensity={0.9} position={[0, -8, 5]} />
-              <BackgroundDust />
-              <TexturedVisioball
-                rotationRef={ballRotRef}
-                onHoverOffset={(offset) => glowY.setValue(-offset * GLOW_SCALE)}
-              />
-            </Canvas>
-          </Suspense>
+          {showCanvas && (
+            <Suspense fallback={<ActivityIndicator color="#F05568" size="large" />}>
+              <Canvas
+                key={canvasVersion}
+                camera={{ fov: 42, position: [0, 0, 6.2] }}
+                onCreated={configureThreeNativeRenderer}
+              >
+                <ambientLight color="#ffffff" intensity={0.8} />
+                <directionalLight color="#ffffff" intensity={2.2} position={[6, 8, 8]} />
+                <directionalLight color="#FF8A98" intensity={1.4} position={[-6, 4, 4]} />
+                <directionalLight color="#4B1631" intensity={0.9} position={[0, -8, 5]} />
+                <BackgroundDust />
+                <TexturedVisioball
+                  rotationRef={ballRotRef}
+                  onHoverOffset={(offset) => glowY.setValue(-offset * GLOW_SCALE)}
+                />
+              </Canvas>
+            </Suspense>
+          )}
         </View>
-        <View style={styles.batteryBadge}>
-          <Ionicons name={batteryIconName(displayBatteryLevel)} size={15} color={batteryColor(displayBatteryLevel)} />
-          <Text style={[styles.batteryText, { color: batteryColor(displayBatteryLevel) }]}>{displayBatteryLevel}%</Text>
-        </View>
+        <Animated.View
+          style={[
+            styles.batteryBadge,
+            displayBatteryCharging && {
+              opacity: batteryChargeOpacity,
+              transform: [{ scale: batteryChargeScale }],
+            },
+          ]}
+        >
+          <Ionicons
+            name={displayBatteryCharging ? 'battery-charging-outline' : batteryIconName(displayBatteryLevel)}
+            size={15}
+            color={displayBatteryColor}
+          />
+          <Text style={[styles.batteryText, { color: displayBatteryColor }]}>
+            {displayBatteryCharging ? 'Charging' : `${displayBatteryLevel}%`}
+          </Text>
+        </Animated.View>
       </View>
 
       <View style={styles.stageSeparator} />

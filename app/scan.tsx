@@ -32,16 +32,7 @@ function makeStyles(theme: ThemeColors) {
       paddingTop: 4,
       paddingBottom: 0,
     },
-    backBtn: {
-      width: 40,
-      height: 40,
-      alignItems: 'center',
-      justifyContent: 'center',
-      shadowColor: '#A855F7',
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.6,
-      shadowRadius: 8,
-    },
+    headerSpacer: { width: 40, height: 40 },
     titleBlock: { alignItems: 'center', paddingTop: 8, paddingBottom: 20 },
     title: { color: theme.text, fontSize: 28, fontWeight: '900', textAlign: 'center', lineHeight: 36, letterSpacing: -0.4 },
     beaconRow: { marginTop: 18, alignItems: 'center', justifyContent: 'center' },
@@ -325,13 +316,8 @@ export default function ScanScreen() {
         <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent />
 
         <View style={styles.header}>
-          <Pressable
-            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="chevron-back" size={26} color="#A855F7" />
-          </Pressable>
-          <View style={{ width: 40 }} />
+          <View style={styles.headerSpacer} />
+          <View style={styles.headerSpacer} />
         </View>
 
         <View style={styles.titleBlock}>

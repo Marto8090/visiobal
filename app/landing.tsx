@@ -183,7 +183,7 @@ export default function LandingPage() {
   const [interval, setIntervalVal] = useState(15);
   const [motorMode, setMotorMode] = useState<MotorMode>('Gentle');
   const [lightMode, setLightMode] = useState<LightMode>('Constant');
-  const [volume, setVolume] = useState(50);
+  const [volume, setVolume] = useState(5);
 
   const playScale = useRef(new Animated.Value(1)).current;
   const skipBackScale = useRef(new Animated.Value(1)).current;

@@ -14,6 +14,7 @@ import { STORAGE_KEYS } from '../utils/storage';
 const SCAN_DURATION_MS = 8000;
 const DISCONNECT_TIMEOUT_MS = 5000;
 const ADVERTISING_RECOVERY_MS = 1500;
+const BATTERY_POLL_INTERVAL_MS = 1500;
 export const TARGET_BLE_DEVICE_NAME = 'VisioBal';
 export const COMMAND_SERVICE_UUID        = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
 export const COMMAND_CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
@@ -35,6 +36,7 @@ function validateCommand(command: string): void {
 }
 type BleRuntime = typeof import('react-native-ble-plx');
 export type BluetoothSessionSnapshot = {
+  batteryIsCharging: boolean | null;
   batteryLevel: number | null;
   connectedDevice: BallDevice | null;
   isConnected: boolean;
@@ -54,8 +56,10 @@ let lastDisconnectAt = 0;
 const verifiedDeviceIds = new Set<string>();
 let disconnectSubscription: Subscription | null = null;
 let batterySubscription: Subscription | null = null;
+let batteryPollInterval: ReturnType<typeof setInterval> | null = null;
 const sessionListeners = new Set<() => void>();
 let sessionSnapshot: BluetoothSessionSnapshot = {
+  batteryIsCharging: null,
   batteryLevel: null,
   connectedDevice: null,
   isConnected: false,
@@ -64,6 +68,7 @@ let sessionSnapshot: BluetoothSessionSnapshot = {
 
 function updateSessionSnapshot() {
   sessionSnapshot = {
+    batteryIsCharging: sessionSnapshot.batteryIsCharging,
     batteryLevel: sessionSnapshot.batteryLevel,
     connectedDevice: connectedDevice ? toBallDevice(connectedDevice) : null,
     isConnected: connectedDevice !== null,
@@ -83,12 +88,27 @@ function clearDisconnectSubscription() {
 function clearBatterySubscription() {
   batterySubscription?.remove();
   batterySubscription = null;
+
+  if (batteryPollInterval) {
+    clearInterval(batteryPollInterval);
+    batteryPollInterval = null;
+  }
 }
 
-function setBatteryLevel(nextBatteryLevel: number | null) {
+function setBatteryInfo(nextBatteryInfo: { batteryIsCharging?: boolean | null; batteryLevel?: number | null }) {
+  const hasBatteryIsCharging = Object.prototype.hasOwnProperty.call(nextBatteryInfo, 'batteryIsCharging');
+  const hasBatteryLevel = Object.prototype.hasOwnProperty.call(nextBatteryInfo, 'batteryLevel');
+
   sessionSnapshot = {
     ...sessionSnapshot,
-    batteryLevel: nextBatteryLevel,
+    batteryIsCharging:
+      hasBatteryIsCharging
+        ? nextBatteryInfo.batteryIsCharging ?? null
+        : sessionSnapshot.batteryIsCharging,
+    batteryLevel:
+      hasBatteryLevel
+        ? nextBatteryInfo.batteryLevel ?? null
+        : sessionSnapshot.batteryLevel,
   };
   emitSessionChange();
 }
@@ -109,6 +129,7 @@ function setConnectedDevice(nextDevice: Device | null) {
   if (!nextDevice) {
     sessionSnapshot = {
       ...sessionSnapshot,
+      batteryIsCharging: null,
       batteryLevel: null,
     };
   }
@@ -119,6 +140,18 @@ function setConnectedDevice(nextDevice: Device | null) {
     });
   }
 
+  emitSessionChange();
+}
+
+function refreshConnectedDevice(nextDevice: Device) {
+  connectedDevice = nextDevice;
+
+  if (hasExactTargetName(nextDevice)) {
+    lastKnownDeviceId = nextDevice.id;
+    void AsyncStorage.setItem(STORAGE_KEYS.LAST_DEVICE_ID, nextDevice.id);
+  }
+
+  updateSessionSnapshot();
   emitSessionChange();
 }
 
@@ -148,7 +181,10 @@ function base64ToBytes(value: string): Uint8Array {
   return Uint8Array.from(bytes);
 }
 
-function decodeBatteryLevel(value: string | null | undefined): number | null {
+function decodeBatteryInfo(value: string | null | undefined): {
+  batteryIsCharging?: boolean | null;
+  batteryLevel?: number | null;
+} | null {
   if (!value) {
     return null;
   }
@@ -159,10 +195,54 @@ function decodeBatteryLevel(value: string | null | undefined): number | null {
   }
 
   const textValue = String.fromCharCode(...bytes).trim();
-  const numericValue = Number.parseInt(textValue, 10);
-  const rawValue = Number.isFinite(numericValue) ? numericValue : bytes[0];
+  const normalizedText = textValue.toLowerCase();
+  const chargingMatch = normalizedText.match(/^charging\s*:\s*(true|false)$/);
+  if (chargingMatch) {
+    return {
+      batteryIsCharging: chargingMatch[1] === 'true',
+    };
+  }
 
-  return Math.max(0, Math.min(100, rawValue));
+  const batteryPercentMatch = normalizedText.match(/^bat%\s*:\s*(\d{1,3})$/);
+  if (batteryPercentMatch) {
+    return {
+      batteryLevel: Math.max(0, Math.min(100, Number.parseInt(batteryPercentMatch[1], 10))),
+    };
+  }
+
+  const batteryIsCharging =
+    normalizedText.includes('not charging') ||
+    normalizedText.includes('not_charging') ||
+    normalizedText.includes('notcharging') ||
+    normalizedText.includes('discharging') ||
+    normalizedText.includes('charging:false') ||
+    normalizedText.includes('"charging":false')
+      ? false
+      : normalizedText.includes('"charging":true') ||
+          normalizedText.includes('charging:true') ||
+          normalizedText.includes('charging')
+        ? true
+        : null;
+
+  const numericMatch = textValue.match(/(?:bat%\s*:\s*)?(\d{1,3})/i);
+  const numericValue = numericMatch ? Number.parseInt(numericMatch[1], 10) : Number.NaN;
+  const rawValue = Number.isFinite(numericValue) ? numericValue : bytes.length === 1 ? bytes[0] : null;
+  const batteryLevel = rawValue === null ? null : Math.max(0, Math.min(100, rawValue));
+
+  const batteryInfo: {
+    batteryIsCharging?: boolean | null;
+    batteryLevel?: number | null;
+  } = {};
+
+  if (batteryIsCharging !== null) {
+    batteryInfo.batteryIsCharging = batteryIsCharging;
+  }
+
+  if (batteryLevel !== null) {
+    batteryInfo.batteryLevel = batteryLevel;
+  }
+
+  return Object.keys(batteryInfo).length > 0 ? batteryInfo : null;
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -391,15 +471,15 @@ async function startBatteryMonitor(device: Device): Promise<void> {
 
   const target = await resolveCharacteristicByUuid(device, BATTERY_CHARACTERISTIC_UUID);
   if (!target) {
-    setBatteryLevel(null);
+    setBatteryInfo({ batteryIsCharging: null, batteryLevel: null });
     return;
   }
 
   const applyCharacteristicValue = (characteristic: Characteristic | null) => {
-    const nextBatteryLevel = decodeBatteryLevel(characteristic?.value);
+    const nextBatteryInfo = decodeBatteryInfo(characteristic?.value);
 
-    if (nextBatteryLevel !== null) {
-      setBatteryLevel(nextBatteryLevel);
+    if (nextBatteryInfo !== null) {
+      setBatteryInfo(nextBatteryInfo);
     }
   };
 
@@ -410,6 +490,24 @@ async function startBatteryMonitor(device: Device): Promise<void> {
     } catch {
       // Some test characteristics may only notify.
     }
+
+    let batteryReadInProgress = false;
+    batteryPollInterval = setInterval(() => {
+      if (batteryReadInProgress || connectedDevice?.id !== target.refreshedDevice.id) {
+        return;
+      }
+
+      batteryReadInProgress = true;
+      void target.refreshedDevice
+        .readCharacteristicForService(target.service.uuid, target.characteristic.uuid)
+        .then(applyCharacteristicValue)
+        .catch(() => {
+          // Notification support differs between ESP32 builds, so polling failures are ignored.
+        })
+        .finally(() => {
+          batteryReadInProgress = false;
+        });
+    }, BATTERY_POLL_INTERVAL_MS);
   }
 
   if (target.characteristic.isNotifiable || target.characteristic.isIndicatable) {
@@ -749,7 +847,7 @@ export async function sendCommandToBall(command: string): Promise<void> {
   }
 
   const { characteristic, refreshedDevice } = await resolveCommandTarget(connectedDevice);
-  setConnectedDevice(refreshedDevice);
+  refreshConnectedDevice(refreshedDevice);
   const payload = encodeCommandPayload(command);
 
   if (characteristic.isWritableWithResponse) {
