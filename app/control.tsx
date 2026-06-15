@@ -278,9 +278,6 @@ export default function ControlScreen() {
 
   const ballRotRef = useRef({ x: 0, y: 0 });
   const panStartRef = useRef({ x: 0, y: 0 });
-  const glowY = useRef(new Animated.Value(0)).current;
-  const CANVAS_H = Math.min(width * 0.82, 320);
-  const GLOW_SCALE = CANVAS_H / (2 * Math.tan((42 / 2) * (Math.PI / 180)) * 6.2);
 
   const navBarHeight = insets.bottom;
   const SAFE_BOTTOM = navBarHeight + 16;
@@ -475,8 +472,8 @@ export default function ControlScreen() {
       <StatusBar barStyle={theme.statusBarStyle} backgroundColor="transparent" translucent />
 
       <View style={styles.ballStage}>
-        <Animated.View style={[{ position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: outerGlowColor }, { transform: [{ translateY: glowY }] }]} />
-        <Animated.View style={[{ position: 'absolute', width: 240, height: 240, borderRadius: 120, backgroundColor: midGlowColor }, { transform: [{ translateY: glowY }] }]} />
+        <View style={{ position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: outerGlowColor }} />
+        <View style={{ position: 'absolute', width: 240, height: 240, borderRadius: 120, backgroundColor: midGlowColor }} />
         <View {...ballPan.panHandlers} style={styles.canvasWrap}>
           {showCanvas && (
             <Suspense fallback={<ActivityIndicator color="#F05568" size="large" />}>
@@ -490,10 +487,7 @@ export default function ControlScreen() {
                 <directionalLight color="#FF8A98" intensity={1.4} position={[-6, 4, 4]} />
                 <directionalLight color="#4B1631" intensity={0.9} position={[0, -8, 5]} />
                 <BackgroundDust />
-                <TexturedVisioball
-                  rotationRef={ballRotRef}
-                  onHoverOffset={(offset) => glowY.setValue(-offset * GLOW_SCALE)}
-                />
+                <TexturedVisioball rotationRef={ballRotRef} />
               </Canvas>
             </Suspense>
           )}

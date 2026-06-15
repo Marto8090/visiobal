@@ -1,14 +1,17 @@
 import { useFrame } from '@react-three/fiber/native';
-import { useMemo, useRef } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
 import type { Points } from 'three';
 import {
   BufferGeometry,
   DoubleSide,
   Float32BufferAttribute,
   Group,
+  InstancedMesh,
+  Matrix4,
   MathUtils,
   Mesh,
   PointLight,
+  Vector3,
 } from 'three';
 
 type TexturedVisioballProps = {
@@ -30,7 +33,9 @@ const BALL_RADIUS = 1.3;
 const DETAIL_RADIUS = BALL_RADIUS + 0.002;
 const SEAM_RADIUS = BALL_RADIUS + 0.003;
 const SEAM_HALF_WIDTH = 0.078;
-const SEAM_SEGMENTS = 144;
+const SEAM_SEGMENTS = 96;
+const HONEYCOMB_OUTER_DEPTH = 0.0005;
+const HONEYCOMB_INNER_DEPTH = 0.0015;
 const HONEYCOMB_SECTOR_CENTERS = [
   -Math.PI * 0.80,
   -Math.PI * 0.25,
@@ -89,22 +94,59 @@ function createHoneycombDetails(): SurfaceDetail[] {
   return details;
 }
 
-function HoneycombCell({ detail }: { detail: SurfaceDetail }) {
+function createSurfaceMatrix(detail: SurfaceDetail, depthOffset: number) {
+  const matrix = new Matrix4();
+  const transform = new Matrix4();
+
+  matrix.makeRotationY(detail.lon);
+  matrix.multiply(transform.makeRotationX(-detail.lat));
+  matrix.multiply(transform.makeTranslation(0, 0, DETAIL_RADIUS + depthOffset));
+  matrix.multiply(transform.makeRotationZ(detail.twist));
+  matrix.scale(new Vector3(detail.scale, detail.scale, detail.scale));
+
+  return matrix;
+}
+
+function HoneycombCells({ details }: { details: SurfaceDetail[] }) {
+  const outerRef = useRef<InstancedMesh>(null);
+  const innerRef = useRef<InstancedMesh>(null);
+  const outerMatrices = useMemo(
+    () => details.map((detail) => createSurfaceMatrix(detail, HONEYCOMB_OUTER_DEPTH)),
+    [details]
+  );
+  const innerMatrices = useMemo(
+    () => details.map((detail) => createSurfaceMatrix(detail, HONEYCOMB_INNER_DEPTH)),
+    [details]
+  );
+
+  useLayoutEffect(() => {
+    outerMatrices.forEach((matrix, index) => {
+      outerRef.current?.setMatrixAt(index, matrix);
+    });
+    innerMatrices.forEach((matrix, index) => {
+      innerRef.current?.setMatrixAt(index, matrix);
+    });
+
+    if (outerRef.current) {
+      outerRef.current.instanceMatrix.needsUpdate = true;
+    }
+
+    if (innerRef.current) {
+      innerRef.current.instanceMatrix.needsUpdate = true;
+    }
+  }, [innerMatrices, outerMatrices]);
+
   return (
-    <group rotation={[0, detail.lon, 0]}>
-      <group rotation={[-detail.lat, 0, 0]}>
-        <group position={[0, 0, DETAIL_RADIUS]} rotation={[0, 0, detail.twist]} scale={detail.scale}>
-          <mesh position={[0, 0, 0.0005]}>
-            <circleGeometry args={[0.078, 6]} />
-            <meshStandardMaterial color="#ef6b70" roughness={0.78} metalness={0} side={DoubleSide} />
-          </mesh>
-          <mesh position={[0, 0, 0.0015]}>
-            <circleGeometry args={[0.054, 6]} />
-            <meshStandardMaterial color="#8e2430" roughness={0.92} metalness={0} side={DoubleSide} />
-          </mesh>
-        </group>
-      </group>
-    </group>
+    <>
+      <instancedMesh ref={outerRef} args={[undefined, undefined, details.length]} renderOrder={2}>
+        <circleGeometry args={[0.078, 6]} />
+        <meshStandardMaterial color="#ef6b70" roughness={0.78} metalness={0} side={DoubleSide} />
+      </instancedMesh>
+      <instancedMesh ref={innerRef} args={[undefined, undefined, details.length]} renderOrder={3}>
+        <circleGeometry args={[0.054, 6]} />
+        <meshStandardMaterial color="#8e2430" roughness={0.92} metalness={0} side={DoubleSide} />
+      </instancedMesh>
+    </>
   );
 }
 
@@ -208,10 +250,8 @@ export function TexturedVisioball({ rotationX = 0, rotationY = 0, rotationRef, o
       <pointLight ref={orbitLightRef} color="#FFFFFF" distance={10} intensity={3} />
 
       <mesh ref={coreRef}>
-        <sphereGeometry args={[BALL_RADIUS, 96, 96]} />
-        <meshPhysicalMaterial
-          clearcoat={0.25}
-          clearcoatRoughness={0.72}
+        <sphereGeometry args={[BALL_RADIUS, 64, 48]} />
+        <meshStandardMaterial
           color="#d84e59"
           emissive="#3d0d14"
           emissiveIntensity={0.04}
@@ -224,9 +264,7 @@ export function TexturedVisioball({ rotationX = 0, rotationY = 0, rotationRef, o
         <SeamRing rotation={[Math.PI / 2, 0, 0]} />
         <SeamRing rotation={[0, Math.PI / 2, 0]} />
         <SeamRing rotation={[0, 0, 0]} />
-        {honeycombDetails.map((detail) => (
-          <HoneycombCell key={detail.key} detail={detail} />
-        ))}
+        <HoneycombCells details={honeycombDetails} />
       </group>
 
       <mesh ref={shadowRef} position={[0, -2.2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -251,7 +289,7 @@ export function BackgroundDust() {
 
   return (
     <points ref={pointsRef}>
-      <sphereGeometry args={[8, 48, 48]} />
+      <sphereGeometry args={[8, 32, 24]} />
       <pointsMaterial color="#3B82F6" opacity={0.5} size={0.04} sizeAttenuation transparent />
     </points>
   );
