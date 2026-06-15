@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useIsFocused } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -157,7 +156,6 @@ function makeStyles(theme: ThemeColors) {
 
 export default function SoundPage() {
   const router = useRouter();
-  const isFocused = useIsFocused();
   const { from } = useLocalSearchParams<{ from?: string }>();
   const { theme } = useTheme();
   const { t } = useI18n();
@@ -180,13 +178,6 @@ export default function SoundPage() {
   const progressPct = `${Math.round(progress * 100)}%` as `${number}%`;
   const displayIsPlaying = isConnected && isPlaying;
 
-  // Send BLE command when a hardware track is selected while connected
-  useEffect(() => {
-    if (isFocused && currentTrack.command && isConnected && canSendCommands) {
-      void sendCommandToBall(currentTrack.command).catch(() => {});
-    }
-  }, [trackIndex, isFocused]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const pressIn = useCallback((scale: Animated.Value) =>
     Animated.spring(scale, { toValue: 1.22, useNativeDriver: true, tension: 300, friction: 8 }).start(), []);
   const pressOut = useCallback((scale: Animated.Value) =>
@@ -197,6 +188,23 @@ export default function SoundPage() {
     void sendCommandToBall(command).catch(() => {});
     return true;
   }, [canSendCommands, isConnected, sendCommandToBall]);
+
+  const selectTrackAndPlay = useCallback((nextTrackIndex: number) => {
+    const nextTrack = TRACKS[nextTrackIndex] ?? TRACKS[0];
+    const canPlayOnBall = isConnected && canSendCommands;
+
+    setTrackIndex(nextTrackIndex);
+    setIsPlaying(canPlayOnBall);
+
+    if (!canPlayOnBall) {
+      return;
+    }
+
+    void (async () => {
+      await sendCommandToBall(nextTrack.command);
+      await sendCommandToBall('PLAY');
+    })().catch(() => {});
+  }, [canSendCommands, isConnected, sendCommandToBall, setIsPlaying, setTrackIndex]);
 
   const togglePlay = () => {
     if (!isConnected || !canSendCommands) {
@@ -216,13 +224,11 @@ export default function SoundPage() {
   };
 
   const skipNext = () => {
-    setTrackIndex((trackIndex + 1) % TRACKS.length);
-    setIsPlaying(isConnected && canSendCommands);
+    selectTrackAndPlay((trackIndex + 1) % TRACKS.length);
   };
 
   const skipPrev = () => {
-    setTrackIndex((trackIndex - 1 + TRACKS.length) % TRACKS.length);
-    setIsPlaying(isConnected && canSendCommands);
+    selectTrackAndPlay((trackIndex - 1 + TRACKS.length) % TRACKS.length);
   };
 
   const handleBack = useCallback(() => {
@@ -376,8 +382,7 @@ export default function SoundPage() {
             return (
               <Pressable
                 onPress={() => {
-                  setTrackIndex(index);
-                  setIsPlaying(isConnected && canSendCommands);
+                  selectTrackAndPlay(index);
                 }}
                 style={({ pressed }) => [
                   styles.trackRow,

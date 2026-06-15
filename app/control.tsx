@@ -174,7 +174,6 @@ export default function ControlScreen() {
   const styles = useMemo(() => makeStyles(theme, isDark), [theme, isDark]);
   const { batteryIsCharging, batteryLevel, canSendCommands, connectedDevice, disconnectFromBall, isConnected, sendCommandToBall } = useBluetoothSession();
   const { isPlaying, trackIndex, setIsPlaying, setTrackIndex } = usePlayerState();
-  const currentTrack = TRACKS[trackIndex] ?? TRACKS[0];
 
   const [disconnectSending, setDisconnectSending] = useState(false);
   const [sleepSending, setSleepSending] = useState(false);
@@ -248,12 +247,6 @@ export default function ControlScreen() {
     outputRange: [1, 1.08],
   });
 
-  useEffect(() => {
-    if (isFocused && currentTrack.command && isConnected && canSendCommands) {
-      void sendCommandToBall(currentTrack.command).catch(() => {});
-    }
-  }, [trackIndex, isFocused]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const pressIn = useCallback((scale: Animated.Value) => {
     Animated.spring(scale, { toValue: 1.22, useNativeDriver: true, tension: 300, friction: 8 }).start();
   }, []);
@@ -265,6 +258,23 @@ export default function ControlScreen() {
     if (!isConnected || !canSendCommands) return;
     void sendCommandToBall(command).catch(() => {});
   }, [canSendCommands, isConnected, sendCommandToBall]);
+
+  const selectTrackAndPlay = useCallback((nextTrackIndex: number) => {
+    const nextTrack = TRACKS[nextTrackIndex] ?? TRACKS[0];
+
+    if (!deviceReady || !canSendCommands) {
+      router.replace('/scan' as Href);
+      return;
+    }
+
+    setTrackIndex(nextTrackIndex);
+    setIsPlaying(true);
+
+    void (async () => {
+      await sendCommandToBall(nextTrack.command);
+      await sendCommandToBall('PLAY');
+    })().catch(() => {});
+  }, [canSendCommands, deviceReady, router, sendCommandToBall, setIsPlaying, setTrackIndex]);
 
   const ballRotRef = useRef({ x: 0, y: 0 });
   const panStartRef = useRef({ x: 0, y: 0 });
@@ -403,8 +413,7 @@ export default function ControlScreen() {
       return;
     }
 
-    setTrackIndex((trackIndex - 1 + TRACKS.length) % TRACKS.length);
-    setIsPlaying(true);
+    selectTrackAndPlay((trackIndex - 1 + TRACKS.length) % TRACKS.length);
   };
 
   const handleSkipForward = () => {
@@ -413,8 +422,7 @@ export default function ControlScreen() {
       return;
     }
 
-    setTrackIndex((trackIndex + 1) % TRACKS.length);
-    setIsPlaying(true);
+    selectTrackAndPlay((trackIndex + 1) % TRACKS.length);
   };
 
   const handleVolumeComplete = (nextVolume: number) => {

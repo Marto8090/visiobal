@@ -195,12 +195,6 @@ export default function LandingPage() {
   const [canvasVersion, setCanvasVersion] = useState(0);
   const displayIsPlaying = isConnected && isPlaying;
 
-  useEffect(() => {
-    if (isFocused && currentTrack.command && isConnected && canSendCommands) {
-      void sendCommandToBall(currentTrack.command).catch(() => {});
-    }
-  }, [trackIndex, isFocused]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const pressIn = useCallback((scale: Animated.Value) => {
     Animated.spring(scale, { toValue: 1.22, useNativeDriver: true, tension: 300, friction: 8 }).start();
   }, []);
@@ -212,6 +206,23 @@ export default function LandingPage() {
     if (!isConnected || !canSendCommands) return;
     void sendCommandToBall(command).catch(() => {});
   }, [canSendCommands, isConnected, sendCommandToBall]);
+
+  const selectTrackAndPlay = useCallback((nextTrackIndex: number) => {
+    const nextTrack = TRACKS[nextTrackIndex] ?? TRACKS[0];
+    const canPlayOnBall = isConnected && canSendCommands;
+
+    setTrackIndex(nextTrackIndex);
+    setIsPlaying(canPlayOnBall);
+
+    if (!canPlayOnBall) {
+      return;
+    }
+
+    void (async () => {
+      await sendCommandToBall(nextTrack.command);
+      await sendCommandToBall('PLAY');
+    })().catch(() => {});
+  }, [canSendCommands, isConnected, sendCommandToBall, setIsPlaying, setTrackIndex]);
 
   const togglePlay = () => {
     if (!isConnected || !canSendCommands) {
@@ -225,13 +236,11 @@ export default function LandingPage() {
   };
 
   const skipNext = () => {
-    setTrackIndex((trackIndex + 1) % TRACKS.length);
-    setIsPlaying(isConnected && canSendCommands);
+    selectTrackAndPlay((trackIndex + 1) % TRACKS.length);
   };
 
   const skipPrev = () => {
-    setTrackIndex((trackIndex - 1 + TRACKS.length) % TRACKS.length);
-    setIsPlaying(isConnected && canSendCommands);
+    selectTrackAndPlay((trackIndex - 1 + TRACKS.length) % TRACKS.length);
   };
 
   const handleVolumeComplete = (nextVolume: number) => {
