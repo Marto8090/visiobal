@@ -256,9 +256,6 @@ export default function SoundPage() {
     return () => subscription.remove();
   }, [from, handleBack]);
 
-  const connectedColor = isConnected ? '#22C55E' : '#F59E0B';
-  const connectedLabel = isConnected ? 'Ball connected - hardware audio active' : 'Not connected - connect ball to play sounds';
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle={theme.statusBarStyle} />
@@ -273,12 +270,6 @@ export default function SoundPage() {
         </View>
 
         <View style={styles.playerCard}>
-
-          <View style={styles.statusBar}>
-            <View style={[styles.statusDot, { backgroundColor: connectedColor }]} />
-            <Text style={[styles.statusText, { color: connectedColor }]}>{connectedLabel}</Text>
-          </View>
-
           <View style={styles.topRow}>
             <View style={styles.artWrap}>
               <View style={styles.artInner}>
