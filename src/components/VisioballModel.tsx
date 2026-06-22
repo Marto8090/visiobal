@@ -4,6 +4,7 @@ import type { Points } from 'three';
 import {
   BufferGeometry,
   DoubleSide,
+  Euler,
   Float32BufferAttribute,
   Group,
   InstancedMesh,
@@ -11,6 +12,7 @@ import {
   MathUtils,
   Mesh,
   PointLight,
+  Quaternion,
   Vector3,
 } from 'three';
 
@@ -28,6 +30,11 @@ type SurfaceDetail = {
   scale: number;
   twist: number;
 };
+
+// Auto-rotation: continuous 360° spin around an axis tilted off vertical,
+// so the ball tumbles diagonally (you see top + bottom, not just the sides).
+const TUMBLE_TILT_DEG = 40;
+const TUMBLE_SPEED = 0.3; // radians per second around the tilted axis
 
 const BALL_RADIUS = 1.3;
 const DETAIL_RADIUS = BALL_RADIUS + 0.002;
@@ -200,6 +207,15 @@ export function TexturedVisioball({ rotationX = 0, rotationY = 0, rotationRef, o
   const orbitLightRef = useRef<PointLight>(null);
   const honeycombDetails = useMemo(createHoneycombDetails, []);
 
+  // Tilted spin axis + scratch quaternions, allocated once per instance.
+  const tumbleAxis = useMemo(() => {
+    const tilt = MathUtils.degToRad(TUMBLE_TILT_DEG);
+    return new Vector3(Math.sin(tilt), Math.cos(tilt), 0).normalize();
+  }, []);
+  const autoQuat = useMemo(() => new Quaternion(), []);
+  const dragQuat = useMemo(() => new Quaternion(), []);
+  const dragEuler = useMemo(() => new Euler(), []);
+
   useFrame((state) => {
     const time = state.clock.getElapsedTime();
 
@@ -207,14 +223,16 @@ export function TexturedVisioball({ rotationX = 0, rotationY = 0, rotationRef, o
       const liveRotation = rotationRef?.current;
       const baseRotationX = liveRotation?.x ?? rotationX;
       const baseRotationY = liveRotation?.y ?? rotationY;
-      const idleX = Math.sin(time * 0.5) * 0.1;
-      const nextRotationY = time * 0.3 + baseRotationY;
-      const nextRotationX = idleX + baseRotationX;
 
-      coreRef.current.rotation.y = nextRotationY;
-      coreRef.current.rotation.x = nextRotationX;
-      detailGroupRef.current.rotation.y = nextRotationY;
-      detailGroupRef.current.rotation.x = nextRotationX;
+      // Continuous 360° tumble around the tilted axis.
+      autoQuat.setFromAxisAngle(tumbleAxis, time * TUMBLE_SPEED);
+      // User drag (or static props) layered on top of the tumble.
+      dragEuler.set(baseRotationX, baseRotationY, 0);
+      dragQuat.setFromEuler(dragEuler);
+      dragQuat.multiply(autoQuat);
+
+      coreRef.current.quaternion.copy(dragQuat);
+      detailGroupRef.current.quaternion.copy(dragQuat);
     }
 
     if (orbitLightRef.current) {
