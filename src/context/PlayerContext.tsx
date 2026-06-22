@@ -18,14 +18,14 @@ type PlayerStateType = {
 };
 
 const PlayerStateContext = createContext<PlayerStateType>({
-  isPlaying: true,
+  isPlaying: false,
   trackIndex: 0,
   setIsPlaying: () => {},
   setTrackIndex: () => {},
 });
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [trackIndex, setTrackIndex] = useState(0);
 
   return (

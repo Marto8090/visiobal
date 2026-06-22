@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Canvas } from '@react-three/fiber/native';
 import { useRouter } from 'expo-router';
-import { Suspense, useEffect, useMemo, useRef } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TexturedVisioball } from '@/src/components/VisioballModel';
 import { useI18n } from '@/src/context/I18nContext';
 import { ThemeColors, useTheme } from '@/src/context/ThemeContext';
+import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 import { configureThreeNativeRenderer } from '@/src/utils/configureThreeNativeRenderer';
 
 const { width, height } = Dimensions.get('window');
@@ -66,12 +67,30 @@ export default function RadarPage() {
   const router = useRouter();
   const { theme } = useTheme();
   const { t } = useI18n();
+  const { canSendCommands, isConnected, sendCommandToBall } = useBluetoothSession();
   const styles = useMemo(() => makeStyles(theme), [theme]);
+  const [lastPingFailed, setLastPingFailed] = useState(false);
 
   const ring1 = useRef(new Animated.Value(0)).current;
   const ring2 = useRef(new Animated.Value(0)).current;
   const ring3 = useRef(new Animated.Value(0)).current;
   const dotBounce = useRef(new Animated.Value(0)).current;
+  const pingInFlightRef = useRef(false);
+  const canPingBall = isConnected && canSendCommands;
+
+  const sendPing = useCallback(async () => {
+    if (!canPingBall || pingInFlightRef.current) return;
+
+    pingInFlightRef.current = true;
+    try {
+      await sendCommandToBall('PING');
+      setLastPingFailed(false);
+    } catch {
+      setLastPingFailed(true);
+    } finally {
+      pingInFlightRef.current = false;
+    }
+  }, [canPingBall, sendCommandToBall]);
 
   const makePulse = (anim: Animated.Value, delay: number) =>
     Animated.loop(
@@ -98,6 +117,21 @@ export default function RadarPage() {
     a1.start(); a2.start(); a3.start(); dots.start();
     return () => { a1.stop(); a2.stop(); a3.stop(); dots.stop(); };
   }, [dotBounce, ring1, ring2, ring3]);
+
+  useEffect(() => {
+    setLastPingFailed(false);
+
+    if (!canPingBall) return;
+
+    void sendPing();
+    const interval = setInterval(() => {
+      void sendPing();
+    }, 2500);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [canPingBall, sendPing]);
 
   const ringStyle = (anim: Animated.Value) => ({
     transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 2.2] }) }],
@@ -161,7 +195,13 @@ export default function RadarPage() {
           <View style={styles.infoDivider} />
           <View style={styles.infoRow}>
             <Ionicons name="musical-notes" size={14} color={theme.textSubtle} />
-            <Text style={styles.infoText}>{t('radarAudioPing')}</Text>
+            <Text style={styles.infoText}>
+              {canPingBall
+                ? lastPingFailed
+                  ? t('cmdFailed')
+                  : t('radarAudioPing')
+                : t('connectFirst')}
+            </Text>
           </View>
         </View>
         <Pressable style={({ pressed }) => [styles.cancelBtn, pressed && styles.pressed]} onPress={() => router.back()}>

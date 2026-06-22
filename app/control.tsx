@@ -35,7 +35,10 @@ const { width, height } = Dimensions.get('window');
 const VOLUME_STEPS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 const PEEK_HEIGHT = 43;
 const CONTROLS_MENU_HEIGHT_OFFSET = 1;
-const SHEET_HEIGHT = height * 0.525 - CONTROLS_MENU_HEIGHT_OFFSET;
+const SHEET_HEIGHT = Math.min(
+  height - 72,
+  Math.max(height * 0.61, 480)
+) - CONTROLS_MENU_HEIGHT_OFFSET;
 
 function clamp(v: number, lo: number, hi: number) { return Math.min(Math.max(v, lo), hi); }
 
@@ -114,7 +117,7 @@ function makeStyles(theme: ThemeColors, isDark: boolean) {
     sheetSleepRow: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       backgroundColor: theme.card, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16,
-      marginBottom: 4, borderWidth: 1, borderColor: theme.border,
+      marginBottom: 10, borderWidth: 1, borderColor: theme.border,
     },
     sheetSleepText: { color: theme.text, fontSize: 15, fontWeight: '800' },
     sheetSleepSub: { color: theme.textMuted, fontSize: 12, fontWeight: '500', marginTop: 2 },
@@ -132,6 +135,7 @@ function makeStyles(theme: ThemeColors, isDark: boolean) {
       paddingVertical: 14,
       width: '100%',
     },
+    sheetDisconnectRow: { marginTop: 0, marginBottom: 4 },
     disconnectText: { color: '#EF4444', fontSize: 15, fontWeight: '800' },
     track: { width: 48, height: 28, borderRadius: 14, backgroundColor: theme.tickInactive, padding: 3 },
     trackOn: { backgroundColor: '#A855F7' },
@@ -588,26 +592,6 @@ export default function ControlScreen() {
           </Animated.View>
         </View>
 
-        {deviceReady && (
-          <Pressable
-            disabled={disconnectSending}
-            onPress={() => void handleDisconnect()}
-            style={({ pressed }) => [
-              styles.disconnectRow,
-              pressed && styles.pressed,
-              disconnectSending && styles.disabledPressable,
-            ]}
-          >
-            {disconnectSending
-              ? <ActivityIndicator color="#EF4444" />
-              : <Ionicons name="unlink" size={18} color="#EF4444" />
-            }
-            <Text style={styles.disconnectText}>
-              {disconnectSending ? t('disconnecting') : t('disconnect')}
-            </Text>
-          </Pressable>
-        )}
-
         {!deviceReady && (
           <Pressable onPress={() => router.replace('/scan' as Href)} style={({ pressed }) => [styles.scanBtn, pressed && styles.pressed]}>
             <Ionicons name="scan" size={18} color="#080B14" />
@@ -619,14 +603,13 @@ export default function ControlScreen() {
       {sheetOpen && <Pressable style={styles.backdrop} onPress={closeSheet} />}
 
       <Animated.View
-        {...sheetDrag.panHandlers}
         style={[
           styles.sheet,
           { paddingBottom: SAFE_BOTTOM, bottom: navBarHeight, height: SHEET_HEIGHT },
           { transform: [{ translateY: sheetY }] },
         ]}
       >
-        <View style={styles.dragZone}>
+        <View {...sheetDrag.panHandlers} style={styles.dragZone}>
           <View style={styles.peekStrip}>
             <Animated.View style={[
               styles.chevronContainer,
@@ -665,18 +648,46 @@ export default function ControlScreen() {
               title={t('Settings')} onPress={() => { closeSheet(); router.push('/settings' as Href); }} />
           </View>
 
-          <Pressable
-            disabled={sleepSending}
-            onPress={() => void handleSleepModeToggle()}
-            style={({ pressed }) => [styles.sheetSleepRow, pressed && styles.pressed, sleepSending && styles.disabledPressable]}>
-            <View>
-              <Text style={styles.sheetSleepText}>{t('sleepMode')}</Text>
-              <Text style={styles.sheetSleepSub}>{sleepSending ? t('updating') : t('sleepModeSub')}</Text>
-            </View>
-            <View style={[styles.track, sleepMode && styles.trackOn]}>
-              <View style={[styles.thumb, sleepMode && styles.thumbOn]} />
-            </View>
-          </Pressable>
+          {deviceReady && (
+            <Pressable
+              disabled={sleepSending}
+              onPress={() => void handleSleepModeToggle()}
+              style={({ pressed }) => [
+                styles.sheetSleepRow,
+                pressed && styles.pressed,
+                sleepSending && styles.disabledPressable,
+              ]}
+            >
+              <View>
+                <Text style={styles.sheetSleepText}>{t('sleepMode')}</Text>
+                <Text style={styles.sheetSleepSub}>{sleepSending ? t('updating') : t('sleepModeSub')}</Text>
+              </View>
+              <View style={[styles.track, sleepMode && styles.trackOn]}>
+                <View style={[styles.thumb, sleepMode && styles.thumbOn]} />
+              </View>
+            </Pressable>
+          )}
+
+          {deviceReady && (
+            <Pressable
+              disabled={disconnectSending}
+              onPress={() => void handleDisconnect()}
+              style={({ pressed }) => [
+                styles.disconnectRow,
+                styles.sheetDisconnectRow,
+                pressed && styles.pressed,
+                disconnectSending && styles.disabledPressable,
+              ]}
+            >
+              {disconnectSending
+                ? <ActivityIndicator color="#EF4444" />
+                : <Ionicons name="unlink" size={18} color="#EF4444" />
+              }
+              <Text style={styles.disconnectText}>
+                {disconnectSending ? t('disconnecting') : t('disconnect')}
+              </Text>
+            </Pressable>
+          )}
 
           <Text style={styles.footer}>{t('firmwareFooter')}</Text>
         </View>
