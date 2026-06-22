@@ -13,23 +13,28 @@ export type Track = typeof TRACKS[number];
 type PlayerStateType = {
   isPlaying: boolean;
   trackIndex: number;
+  volume: number;
   setIsPlaying: Dispatch<SetStateAction<boolean>>;
   setTrackIndex: Dispatch<SetStateAction<number>>;
+  setVolume: Dispatch<SetStateAction<number>>;
 };
 
 const PlayerStateContext = createContext<PlayerStateType>({
   isPlaying: false,
   trackIndex: 0,
+  volume: 5,
   setIsPlaying: () => {},
   setTrackIndex: () => {},
+  setVolume: () => {},
 });
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [trackIndex, setTrackIndex] = useState(0);
+  const [volume, setVolume] = useState(5);
 
   return (
-    <PlayerStateContext.Provider value={{ isPlaying, trackIndex, setIsPlaying, setTrackIndex }}>
+    <PlayerStateContext.Provider value={{ isPlaying, trackIndex, volume, setIsPlaying, setTrackIndex, setVolume }}>
       {children}
     </PlayerStateContext.Provider>
   );

@@ -177,12 +177,11 @@ export default function ControlScreen() {
   const { t } = useI18n();
   const styles = useMemo(() => makeStyles(theme, isDark), [theme, isDark]);
   const { batteryIsCharging, batteryLevel, canSendCommands, connectedDevice, disconnectFromBall, isConnected, sendCommandToBall } = useBluetoothSession();
-  const { isPlaying, trackIndex, setIsPlaying, setTrackIndex } = usePlayerState();
+  const { isPlaying, trackIndex, volume, setIsPlaying, setTrackIndex, setVolume } = usePlayerState();
 
   const [disconnectSending, setDisconnectSending] = useState(false);
   const [sleepSending, setSleepSending] = useState(false);
   const [sleepMode, setSleepMode] = useState(false);
-  const [volume, setVolume] = useState(5);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [showCanvas, setShowCanvas] = useState(isFocused);
   const [canvasVersion, setCanvasVersion] = useState(0);

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Animated,
   BackHandler,
@@ -162,10 +162,8 @@ export default function SoundPage() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const { isConnected, canSendCommands, sendCommandToBall } = useBluetoothSession();
 
-  const { isPlaying, trackIndex, setIsPlaying, setTrackIndex } = usePlayerState();
+  const { isPlaying, trackIndex, volume, setIsPlaying, setTrackIndex, setVolume } = usePlayerState();
   const currentTrack: Track = TRACKS[trackIndex] ?? TRACKS[0];
-
-  const [volume, setVolume] = useState(5);
 
   const playScale = useRef(new Animated.Value(1)).current;
   const skipBackScale = useRef(new Animated.Value(1)).current;
