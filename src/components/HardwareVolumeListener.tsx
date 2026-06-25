@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
+import { VolumeManager } from 'react-native-volume-manager';
 
 import { usePlayerState } from '../context/PlayerContext';
 import { useBluetoothSession } from '../hooks/useBluetoothSession';
@@ -114,7 +115,7 @@ export function HardwareVolumeListener() {
         clearTimeout(sendTimeoutRef.current);
         sendTimeoutRef.current = null;
       }
-      void volumeManager.showNativeVolumeUI({ enabled: true }).catch(() => {});
+      void VolumeManager.showNativeVolumeUI({ enabled: true }).catch(() => {});
     };
   }, [sendCommandToBall, setVolume]);
 
