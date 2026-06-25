@@ -1,11 +1,11 @@
 import { createContext, Dispatch, ReactNode, SetStateAction, useContext, useState } from 'react';
 
 export const TRACKS = [
-  { id: '1', title: 'C Major Journey', duration: '0:03', genre: 'Ambient',    command: 'SONG1' },
-  { id: '2', title: 'E Minor Groove',  duration: '0:02', genre: 'Electronic', command: 'SONG2' },
-  { id: '3', title: 'Zen State',       duration: '0:05', genre: 'Meditation', command: 'SONG3' },
-  { id: '4', title: 'Ocean Waves',     duration: '0:04', genre: 'Nature',     command: 'SONG4' },
-  { id: '5', title: 'Ambient Pulse',   duration: '0:03', genre: 'Electronic', command: 'SONG5' },
+  { id: '1', title: 'Alien Signal',    duration: '0:03', genre: 'Sci-Fi',      command: 'SONG1' },
+  { id: '2', title: 'UFO Encounter',   duration: '0:02', genre: 'Sci-Fi',      command: 'SONG2' },
+  { id: '3', title: 'Zombie Invasion', duration: '0:05', genre: 'Horror',      command: 'SONG3' },
+  { id: '4', title: 'Police Sirens',   duration: '0:04', genre: 'Emergency',   command: 'SONG4' },
+  { id: '5', title: 'Vibrant Pulse',   duration: '0:03', genre: 'Electronic',  command: 'SONG5' },
 ] as const;
 
 export type Track = typeof TRACKS[number];

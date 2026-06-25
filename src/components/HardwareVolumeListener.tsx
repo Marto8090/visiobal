@@ -1,11 +1,37 @@
 import { useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
-import { VolumeManager } from 'react-native-volume-manager';
+import { NativeModules, Platform } from 'react-native';
 
 import { usePlayerState } from '../context/PlayerContext';
 import { useBluetoothSession } from '../hooks/useBluetoothSession';
 
 const VOLUME_COMMAND_DELAY_MS = 120;
+
+type VolumeListenerHandle = { remove: () => void };
+type VolumeManagerLike = {
+  showNativeVolumeUI: (config: { enabled: boolean }) => Promise<void>;
+  addVolumeListener: (
+    cb: (event: { type?: string; volume: number }) => void
+  ) => VolumeListenerHandle;
+};
+
+/**
+ * react-native-volume-manager has a native side. If the app binary was built
+ * before the package was added, the package throws at *import time* (it builds a
+ * NativeEventEmitter at module load). Importing it would then crash the whole
+ * router. So we only load it when its native module is actually present in this
+ * build; otherwise this listener is a harmless no-op until the app is rebuilt.
+ */
+function loadVolumeManager(): VolumeManagerLike | null {
+  if (!NativeModules.VolumeManager) {
+    return null;
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy so a missing native module can't crash import.
+    return require('react-native-volume-manager').VolumeManager as VolumeManagerLike;
+  } catch {
+    return null;
+  }
+}
 
 function toVolumePercent(value: number): number {
   return Math.round(Math.min(Math.max(value, 0), 1) * 100);
@@ -24,9 +50,15 @@ export function HardwareVolumeListener() {
   useEffect(() => {
     if (Platform.OS !== 'android') return;
 
-    void VolumeManager.showNativeVolumeUI({ enabled: false }).catch(() => {});
+    const volumeManager = loadVolumeManager();
+    if (!volumeManager) {
+      // Native module not linked into this build — rebuild with `npx expo run:android`.
+      return;
+    }
 
-    const subscription = VolumeManager.addVolumeListener(({ type, volume }) => {
+    void volumeManager.showNativeVolumeUI({ enabled: false }).catch(() => {});
+
+    const subscription = volumeManager.addVolumeListener(({ type, volume }) => {
       if (type && type !== 'music') return;
 
       const nextVolume = toVolumePercent(volume);
@@ -51,7 +83,7 @@ export function HardwareVolumeListener() {
         clearTimeout(sendTimeoutRef.current);
         sendTimeoutRef.current = null;
       }
-      void VolumeManager.showNativeVolumeUI({ enabled: true }).catch(() => {});
+      void volumeManager.showNativeVolumeUI({ enabled: true }).catch(() => {});
     };
   }, [sendCommandToBall, setVolume]);
 
