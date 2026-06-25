@@ -21,7 +21,7 @@ export const COMMAND_CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8
 export const BATTERY_CHARACTERISTIC_UUID = 'a1b2c3d4-1111-2222-3333-abcdefabcdef';
 
 const ALLOWED_COMMANDS = new Set([
-  'ON', 'OFF', 'SLEEP', 'WAKE', 'PLAY', 'PAUSE', 'NEXT', 'PREV', 'PING',
+  'ON', 'OFF', 'SLEEP', 'WAKE', 'PLAY', 'PAUSE', 'NEXT', 'PREV', 'PING', 'PING_STOP',
   'SONG1', 'SONG2', 'SONG3', 'SONG4', 'SONG5',
 ]);
 const ALLOWED_PATTERNS = [
@@ -32,7 +32,7 @@ const ALLOWED_PATTERNS = [
 function validateCommand(command: string): void {
   if (ALLOWED_COMMANDS.has(command)) return;
   if (ALLOWED_PATTERNS.some(p => p.test(command))) return;
-  throw new Error(`Command "${command}" is not permitted. Allowed: ON, OFF, SLEEP, WAKE, PLAY, PAUSE, NEXT, PREV, PING, SONG1-5, VOL:<0-100>, FREQ:<hz>`);
+  throw new Error(`Command "${command}" is not permitted. Allowed: ON, OFF, SLEEP, WAKE, PLAY, PAUSE, NEXT, PREV, PING, PING_STOP, SONG1-5, VOL:<0-100>, FREQ:<hz>`);
 }
 type BleRuntime = typeof import('react-native-ble-plx');
 export type BluetoothSessionSnapshot = {

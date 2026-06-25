@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Canvas } from '@react-three/fiber/native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
@@ -21,6 +21,8 @@ import { useBluetoothSession } from '@/src/hooks/useBluetoothSession';
 import { configureThreeNativeRenderer } from '@/src/utils/configureThreeNativeRenderer';
 
 const { width, height } = Dimensions.get('window');
+const PING_INTERVAL_MS = 2500;
+const PING_STOP_WAIT_MS = 800;
 
 function makeStyles(theme: ThemeColors) {
   return StyleSheet.create({
@@ -76,21 +78,58 @@ export default function RadarPage() {
   const ring3 = useRef(new Animated.Value(0)).current;
   const dotBounce = useRef(new Animated.Value(0)).current;
   const pingInFlightRef = useRef(false);
+  const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pageActiveRef = useRef(false);
+  const stopPingSentRef = useRef(false);
   const canPingBall = isConnected && canSendCommands;
 
+  const stopPinging = useCallback(() => {
+    pageActiveRef.current = false;
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = null;
+    }
+  }, []);
+
   const sendPing = useCallback(async () => {
-    if (!canPingBall || pingInFlightRef.current) return;
+    if (!pageActiveRef.current || !canPingBall || pingInFlightRef.current) return;
 
     pingInFlightRef.current = true;
     try {
       await sendCommandToBall('PING');
-      setLastPingFailed(false);
+      if (pageActiveRef.current) {
+        setLastPingFailed(false);
+      }
     } catch {
-      setLastPingFailed(true);
+      if (pageActiveRef.current) {
+        setLastPingFailed(true);
+      }
     } finally {
       pingInFlightRef.current = false;
     }
   }, [canPingBall, sendCommandToBall]);
+
+  const sendStopPing = useCallback(async () => {
+    if (!canPingBall || stopPingSentRef.current) return;
+
+    stopPingSentRef.current = true;
+    const deadline = Date.now() + PING_STOP_WAIT_MS;
+    while (pingInFlightRef.current && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+
+    try {
+      await sendCommandToBall('PING_STOP');
+    } catch {
+      // The user is already leaving the screen, so failed stop writes are ignored here.
+    }
+  }, [canPingBall, sendCommandToBall]);
+
+  const handleExit = useCallback(() => {
+    stopPinging();
+    void sendStopPing();
+    router.back();
+  }, [router, sendStopPing, stopPinging]);
 
   const makePulse = (anim: Animated.Value, delay: number) =>
     Animated.loop(
@@ -118,20 +157,24 @@ export default function RadarPage() {
     return () => { a1.stop(); a2.stop(); a3.stop(); dots.stop(); };
   }, [dotBounce, ring1, ring2, ring3]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     setLastPingFailed(false);
+    stopPinging();
 
-    if (!canPingBall) return;
+    if (!canPingBall) return stopPinging;
 
+    stopPingSentRef.current = false;
+    pageActiveRef.current = true;
     void sendPing();
-    const interval = setInterval(() => {
+    pingIntervalRef.current = setInterval(() => {
       void sendPing();
-    }, 2500);
+    }, PING_INTERVAL_MS);
 
     return () => {
-      clearInterval(interval);
+      stopPinging();
+      void sendStopPing();
     };
-  }, [canPingBall, sendPing]);
+  }, [canPingBall, sendPing, sendStopPing, stopPinging]));
 
   const ringStyle = (anim: Animated.Value) => ({
     transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 2.2] }) }],
@@ -152,7 +195,7 @@ export default function RadarPage() {
       <StatusBar barStyle={theme.statusBarStyle} />
 
       <View style={styles.header}>
-        <Pressable style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]} onPress={() => router.back()}>
+        <Pressable style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]} onPress={handleExit}>
           <Ionicons name="arrow-back" size={20} color={theme.text} />
         </Pressable>
         <View style={styles.headerCenter}>
@@ -204,7 +247,7 @@ export default function RadarPage() {
             </Text>
           </View>
         </View>
-        <Pressable style={({ pressed }) => [styles.cancelBtn, pressed && styles.pressed]} onPress={() => router.back()}>
+        <Pressable style={({ pressed }) => [styles.cancelBtn, pressed && styles.pressed]} onPress={handleExit}>
           <Text style={styles.cancelText}>{t('cancel')}</Text>
         </Pressable>
       </View>
