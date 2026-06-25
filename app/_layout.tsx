@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ConnectionAlertListener } from '@/src/components/ConnectionAlertListener';
+import { HardwareVolumeListener } from '@/src/components/HardwareVolumeListener';
 import { AppSettingsProvider } from '@/src/context/AppSettingsContext';
 import { I18nProvider } from '@/src/context/I18nContext';
 import { PlayerProvider } from '@/src/context/PlayerContext';
@@ -15,6 +16,7 @@ export default function RootLayout() {
           <PlayerProvider>
             <SafeAreaProvider>
               <ConnectionAlertListener />
+              <HardwareVolumeListener />
               <Stack>
                 <Stack.Screen name="index" options={{ headerShown: false }} />
                 <Stack.Screen name="scan" options={{ headerShown: false }} />
